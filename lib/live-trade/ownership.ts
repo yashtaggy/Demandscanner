@@ -1,35 +1,59 @@
 /**
  * Live Trade owner resolution.
  *
- * The owner is ALWAYS the authenticated Kite `user_id` from the server-side
- * session. No route, body field or query parameter may supply it.
+ * The owner is ALWAYS the authenticated internal DemandScan user resolved by
+ * `requireAppUser()` from the Firebase app session. No route, body field or
+ * query parameter may supply it, and the Kite user id is never an ownership
+ * key.
  *
  * `resolveLiveTradeOwner` is the only producer of `LiveTradeOwnerId`, so a
  * repository call cannot be made with an unverified string.
  */
 
-import { getSessionFromRequest } from "../kite-session";
+import { AppAuthError } from "../auth/types";
+import { requireActiveSubscription } from "../subscriptions/entitlements";
 import { LiveTradeError } from "./errors";
 import type { LiveTradeOwnerContext, LiveTradeOwnerId } from "./types";
 import { isValidOwnerId } from "./validation";
 
+function mapAuthError(error: unknown): LiveTradeError {
+  if (error instanceof AppAuthError) {
+    if (error.reason === "SUBSCRIPTION_REQUIRED") {
+      return new LiveTradeError("SUBSCRIPTION_REQUIRED");
+    }
+    if (
+      error.reason === "SUSPENDED" ||
+      error.reason === "DISABLED" ||
+      error.reason === "FORBIDDEN"
+    ) {
+      return new LiveTradeError("FORBIDDEN");
+    }
+    return new LiveTradeError("UNAUTHENTICATED");
+  }
+  return new LiveTradeError("INTERNAL");
+}
+
 /**
  * Resolves the owner for a request.
  *
- * Throws `LiveTradeError('UNAUTHENTICATED')` when the session is missing,
- * expired, or has no usable Kite user id. Database failures from the session
- * store propagate unchanged so the route can report a server error rather than
- * a misleading 401.
+ * Throws `LiveTradeError('UNAUTHENTICATED')` when the app session is missing or
+ * unusable, `LiveTradeError('FORBIDDEN')` for a suspended or disabled account,
+ * and `LiveTradeError('SUBSCRIPTION_REQUIRED')` when the account has no current
+ * subscription. Unexpected failures become INTERNAL rather than a misleading 401.
  */
 export async function resolveLiveTradeOwner(
   cookieHeader: string | null | undefined
 ): Promise<LiveTradeOwnerContext> {
-  const session = await getSessionFromRequest(cookieHeader);
+  let userId: string;
+  try {
+    userId = (await requireActiveSubscription(cookieHeader)).user.userId;
+  } catch (error) {
+    throw mapAuthError(error);
+  }
 
-  if (!session) throw new LiveTradeError("UNAUTHENTICATED");
-  if (!isValidOwnerId(session.userId)) throw new LiveTradeError("UNAUTHENTICATED");
+  if (!isValidOwnerId(userId)) throw new LiveTradeError("INTERNAL");
 
-  return { ownerId: session.userId as LiveTradeOwnerId, session };
+  return { ownerId: userId as LiveTradeOwnerId };
 }
 
 /** Convenience wrapper when only the owner id is needed. */

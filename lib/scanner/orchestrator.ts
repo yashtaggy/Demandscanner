@@ -16,7 +16,7 @@
  * Progress is tracked in scan_jobs for UI polling.
  */
 
-import type { KiteSession } from '@/lib/types';
+import type { MarketDataInput } from '@/lib/market-data/context';
 import { getDb } from '@/lib/db';
 import { syncInstruments } from './instruments';
 import { ingestAllInstruments } from './ingest_all';
@@ -35,7 +35,8 @@ import type { Candle, ScannerConfig, Timeframe } from './types';
 
 export interface OrchestratorOptions {
   jobId: string;
-  session: KiteSession;
+  /** System market-data context (or a KiteSession for compatibility). */
+  session: MarketDataInput;
   fromDate: Date;
   toDate: Date;
   config?: ScannerConfig;

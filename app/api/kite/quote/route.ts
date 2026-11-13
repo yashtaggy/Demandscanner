@@ -2,7 +2,7 @@
  * GET /api/kite/quote?symbol=NSE:INFY
  *
  * Returns a live quote for a single instrument.
- * Requires an active Kite session identified by the ds_sid cookie.
+ * Requires an authenticated DemandScan app user.
  *
  * Query params:
  *   symbol  — Required. Format: "EXCHANGE:TRADINGSYMBOL" (e.g. NSE:INFY)
@@ -11,8 +11,15 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import { requireSession } from "@/lib/kite-session";
+import { getSessionFromRequest } from "@/lib/kite-session";
+import { requireActiveSubscription } from "@/lib/subscriptions/entitlements";
+import { authErrorResponse } from "@/lib/auth/http";
 import { getQuotes } from "@/lib/kite-client";
+import {
+  markMarketDataContextUsed,
+  resolveMarketDataContext,
+} from "@/lib/market-data/credentials";
+import { MarketDataUnavailableError } from "@/lib/market-data/errors";
 
 
 // Allowed pattern: EXCHANGE:SYMBOL (alphanumeric, hyphens, ampersands)
@@ -43,19 +50,23 @@ export async function GET(req: NextRequest) {
 
   // ─── Auth check ────────────────────────────────────────────────────────────
   const cookieHeader = req.headers.get("cookie");
-  let session;
   try {
-    session = await requireSession(cookieHeader);
-  } catch {
-    return NextResponse.json(
-      { error: "Not authenticated. Please connect your Zerodha account.", code: "UNAUTHENTICATED" },
-      { status: 401 }
-    );
+    await requireActiveSubscription(cookieHeader);
+  } catch (err) {
+    return authErrorResponse(err);
   }
+  // Optional staging-only fallback; the system connection is preferred.
+  const session = await getSessionFromRequest(cookieHeader);
 
   // ─── Fetch quote ───────────────────────────────────────────────────────────
   try {
-    const quotes = await getQuotes(session.accessToken, [symbol]);
+    const marketData = await resolveMarketDataContext({ provider: "KITE", session });
+    const quotes = await getQuotes(
+      marketData.credentials.accessToken,
+      [symbol],
+      marketData.credentials.apiKey
+    );
+    await markMarketDataContextUsed(marketData);
     const quote = quotes.get(symbol);
 
     if (!quote) {
@@ -70,19 +81,25 @@ export async function GET(req: NextRequest) {
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {
+    if (err instanceof MarketDataUnavailableError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: 503 }
+      );
+    }
     const message = err instanceof Error ? err.message : "Unknown error";
 
     // Classify Kite API errors without leaking internals
     if (message.includes("TokenException") || message.includes("token")) {
       return NextResponse.json(
-        { error: "Kite session expired. Please reconnect.", code: "TOKEN_EXPIRED" },
-        { status: 401 }
+        { error: "Market-data provider credentials expired. Contact an administrator.", code: "MARKET_DATA_AUTH_EXPIRED" },
+        { status: 503 }
       );
     }
     if (message.includes("PermissionException") || message.includes("subscription")) {
       return NextResponse.json(
-        { error: "Permission denied. Check your Kite Connect subscription.", code: "PERMISSION_DENIED" },
-        { status: 403 }
+        { error: "Market-data provider permission denied. Contact an administrator.", code: "MARKET_DATA_PERMISSION_DENIED" },
+        { status: 503 }
       );
     }
     if (message.includes("NetworkException") || message.includes("ECONNREFUSED")) {

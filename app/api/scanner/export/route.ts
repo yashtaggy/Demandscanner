@@ -2,7 +2,8 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { requireSession } from '@/lib/kite-session';
+import { requireActiveSubscription } from '@/lib/subscriptions/entitlements';
+import { authErrorResponse } from '@/lib/auth/http';
 import { getZones } from '@/lib/scanner/zones';
 import { zonesToCsv } from '@/lib/scanner/export';
 import type { Timeframe, ZoneSide } from '@/lib/scanner/types';
@@ -18,9 +19,9 @@ import type { Timeframe, ZoneSide } from '@/lib/scanner/types';
 export async function GET(req: NextRequest) {
   // Authentication – return 401 if not logged in
   try {
-    await requireSession(req.headers.get('cookie'));
-  } catch (e) {
-    return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
+    await requireActiveSubscription(req.headers.get('cookie'));
+  } catch (err) {
+    return authErrorResponse(err);
   }
 
   const { searchParams } = new URL(req.url);

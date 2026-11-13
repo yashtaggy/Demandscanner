@@ -3,7 +3,7 @@
  * instrument search.
  *
  * These run the real HTTP helper, real service and real repository against the
- * stateful fake database; only the Next response object and the Kite session
+ * stateful fake database; only the Next response object and the app-session
  * lookup are substituted.
  */
 
@@ -20,8 +20,8 @@ jest.mock("next/server", () => ({
   },
 }));
 
-jest.mock("@/lib/kite-session", () => ({
-  getSessionFromRequest: jest.fn(),
+jest.mock("@/lib/subscriptions/entitlements", () => ({
+  requireActiveSubscription: jest.fn(),
 }));
 
 jest.mock("@/lib/db", () => ({
@@ -29,7 +29,8 @@ jest.mock("@/lib/db", () => ({
 }));
 
 import type { NextRequest } from "next/server";
-import { getSessionFromRequest } from "@/lib/kite-session";
+import { requireActiveSubscription } from "@/lib/subscriptions/entitlements";
+import { AppAuthError, type AppUser } from "@/lib/auth/types";
 import { GET as getBoard } from "@/app/api/live-trade/board/route";
 import { GET as searchInstrumentsRoute } from "@/app/api/live-trade/instruments/route";
 import { POST as createGroupRoute } from "@/app/api/live-trade/groups/route";
@@ -41,7 +42,9 @@ const globalStore = globalThis as typeof globalThis & {
   __liveTradeDb?: unknown;
 };
 
-const sessionMock = getSessionFromRequest as jest.Mock;
+const appUserMock = requireActiveSubscription as jest.Mock;
+const OWNER_ID = "0f8fad5b-d9cb-469f-a165-70867728950e";
+const OTHER_OWNER_ID = "6f9619ff-8b86-d011-b42d-00c04fc964ff";
 
 // Every test asserts a specific part of this JSON envelope structurally.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,10 +95,32 @@ async function call(
   return { status: res.status, headers: res.headers, body: await res.json() };
 }
 
-function signIn(userId: string | null = "owner-a"): void {
-  sessionMock.mockResolvedValue(
-    userId === null ? null : ({ userId } as unknown as never)
-  );
+function appUser(userId = OWNER_ID): AppUser {
+  return {
+    userId,
+    email: "owner@example.com",
+    displayName: null,
+    status: "ACTIVE",
+    role: "CUSTOMER",
+  };
+}
+
+function signIn(userId = OWNER_ID): void {
+  appUserMock.mockResolvedValue({
+    user: appUser(userId),
+    subscription: { entitled: true, today: "2026-11-13", current: null, history: [] },
+  });
+}
+
+function signedOut(
+  reason:
+    | "UNAUTHENTICATED"
+    | "INVALID_SESSION"
+    | "NO_IDENTITY"
+    | "SUSPENDED"
+    | "DISABLED" = "UNAUTHENTICATED"
+): void {
+  appUserMock.mockRejectedValue(new AppAuthError(reason));
 }
 
 beforeEach(() => {
@@ -112,7 +137,7 @@ beforeEach(() => {
     company_name: "Tata Consultancy Services",
   });
 
-  sessionMock.mockReset();
+  appUserMock.mockReset();
   signIn();
   process.env.NEXT_PUBLIC_APP_URL = "https://app.example";
   jest.spyOn(console, "error").mockImplementation(() => {});
@@ -125,17 +150,19 @@ afterEach(() => {
 // ─── Authentication ─────────────────────────────────────────────────────────
 
 describe("authentication", () => {
-  it("rejects a missing session with 401 and does no database work", async () => {
-    signIn(null);
+  it("rejects a missing app session with 401 and does no database work", async () => {
+    signedOut("UNAUTHENTICATED");
     const { status, body } = await call(getBoard, request("/api/live-trade/board"));
     expect(status).toBe(401);
-    expect(body).toEqual({ error: "Authentication required.", code: "UNAUTHENTICATED" });
+    expect(body).toEqual({
+      error: "Sign in to DemandScan to use Live Trade.",
+      code: "UNAUTHENTICATED",
+    });
     expect(mockFake.standaloneMarkers).toEqual([]);
   });
 
-  it("rejects an expired session the same way", async () => {
-    // getSessionFromRequest returns null for expired or unknown sessions.
-    signIn(null);
+  it("rejects an expired or unverifiable app session the same way", async () => {
+    signedOut("INVALID_SESSION");
     const { status, body } = await call(
       searchInstrumentsRoute,
       request("/api/live-trade/instruments?q=infy")
@@ -144,35 +171,45 @@ describe("authentication", () => {
     expect(body.code).toBe("UNAUTHENTICATED");
   });
 
-  it("rejects a blank owner id even when the session row exists", async () => {
-    signIn("   ");
+  it("rejects a suspended account with 403", async () => {
+    signedOut("SUSPENDED");
     const { status, body } = await call(getBoard, request("/api/live-trade/board"));
-    expect(status).toBe(401);
-    expect(body.code).toBe("UNAUTHENTICATED");
+    expect(status).toBe(403);
+    expect(body.code).toBe("FORBIDDEN");
+    expect(mockFake.standaloneMarkers).toEqual([]);
   });
 
-  it("rejects an owner id longer than 64 characters", async () => {
-    signIn("x".repeat(65));
+  it("rejects a disabled account with 403", async () => {
+    signedOut("DISABLED");
     const { status, body } = await call(getBoard, request("/api/live-trade/board"));
-    expect(status).toBe(401);
-    expect(body.code).toBe("UNAUTHENTICATED");
+    expect(status).toBe(403);
+    expect(body.code).toBe("FORBIDDEN");
+    expect(mockFake.standaloneMarkers).toEqual([]);
   });
 
-  it("maps a session-store failure to 500 without leaking the driver message", async () => {
-    sessionMock.mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.1:5432"));
+  it("maps an identity-store failure to 500 without leaking the driver message", async () => {
+    appUserMock.mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.1:5432"));
     const { status, body } = await call(getBoard, request("/api/live-trade/board"));
     expect(status).toBe(500);
     expect(body).toEqual({ error: "An unexpected error occurred.", code: "INTERNAL" });
     expect(JSON.stringify(body)).not.toContain("ECONNREFUSED");
   });
 
+  it("rejects a healthy account without an active subscription with 403", async () => {
+    appUserMock.mockRejectedValue(new AppAuthError("SUBSCRIPTION_REQUIRED"));
+    const { status, body } = await call(getBoard, request("/api/live-trade/board"));
+    expect(status).toBe(403);
+    expect(body.code).toBe("SUBSCRIPTION_REQUIRED");
+    expect(mockFake.standaloneMarkers).toEqual([]);
+  });
+
   it("ignores owner values supplied in query parameters and headers", async () => {
-    mockFake.seedGroup({ owner: "owner-b", name: "Theirs" });
+    mockFake.seedGroup({ owner: OTHER_OWNER_ID, name: "Theirs" });
     const req = request(
       "/api/live-trade/board?ownerId=owner-b&owner_user_id=owner-b"
     );
-    req.headers.set("x-owner-id", "owner-b");
-    req.headers.set("x-owner-user-id", "owner-b");
+    req.headers.set("x-owner-id", OTHER_OWNER_ID);
+    req.headers.set("x-owner-user-id", OTHER_OWNER_ID);
 
     const { status, body } = await call(getBoard, req);
     expect(status).toBe(200);
@@ -286,7 +323,7 @@ describe("mutation origin protection", () => {
   });
 
   it("rejects before authentication, so no session or database work occurs", async () => {
-    signIn(null);
+    signedOut();
     const { status } = await call(
       createItemRoute,
       request("/api/live-trade/items", {
@@ -326,12 +363,12 @@ describe("GET /api/live-trade/board", () => {
   });
 
   it("returns groups and items in saved order", async () => {
-    mockFake.seedGroup({ owner: "owner-a", name: "Second", sortOrder: 2 });
-    mockFake.seedGroup({ owner: "owner-a", name: "First", sortOrder: 0 });
-    mockFake.seedGroup({ owner: "owner-a", name: "Middle", sortOrder: 1 });
+    mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Second", sortOrder: 2 });
+    mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "First", sortOrder: 0 });
+    mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Middle", sortOrder: 1 });
 
-    mockFake.seedItem({ owner: "owner-a", instrumentId: 1, sortOrder: 1 });
-    mockFake.seedItem({ owner: "owner-a", instrumentId: 2, sortOrder: 0 });
+    mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1, sortOrder: 1 });
+    mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 2, sortOrder: 0 });
 
     const { body } = await call(getBoard, request("/api/live-trade/board"));
     expect(body.data.groups.map((g: { name: string }) => g.name)).toEqual([
@@ -347,8 +384,8 @@ describe("GET /api/live-trade/board", () => {
   });
 
   it("isolates the owner's board from another owner's rows", async () => {
-    mockFake.seedGroup({ owner: "owner-b", name: "Theirs" });
-    mockFake.seedItem({ owner: "owner-b", instrumentId: 1 });
+    mockFake.seedGroup({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", name: "Theirs" });
+    mockFake.seedItem({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", instrumentId: 1 });
 
     const { body } = await call(getBoard, request("/api/live-trade/board"));
     expect(body.data.groups).toEqual([]);
@@ -389,7 +426,7 @@ describe("GET /api/live-trade/board", () => {
   });
 
   it("skips zone reads when includeZones=false", async () => {
-    mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
 
     const { status, body } = await call(
       getBoard,

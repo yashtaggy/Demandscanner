@@ -25,7 +25,6 @@ import {
   LIVE_TRADE_GROUP_LIMIT,
   LIVE_TRADE_ITEM_LIMIT,
   LIVE_TRADE_NOTES_MAX_LENGTH,
-  LIVE_TRADE_OWNER_ID_MAX_LENGTH,
   LIVE_TRADE_PRICE_DECIMALS,
   LIVE_TRADE_PRICE_MAX,
   LIVE_TRADE_PRIORITIES,
@@ -108,15 +107,11 @@ export function isUuid(value: unknown): value is string {
 }
 
 /**
- * Mirrors `live_trade_*_owner_not_blank`:
- * `btrim(owner_user_id) <> '' AND char_length(owner_user_id) <= 64`.
+ * Owner ids are `app_users.user_id` UUIDs. The database enforces UUID NOT NULL
+ * with a foreign key, so a non-UUID value can never identify a workspace.
  */
 export function isValidOwnerId(value: unknown): value is string {
-  return (
-    typeof value === "string" &&
-    value.trim() !== "" &&
-    characterLength(value) <= LIVE_TRADE_OWNER_ID_MAX_LENGTH
-  );
+  return isUuid(value);
 }
 
 // ─── Enum guards ──────────────────────────────────────────────────────────────

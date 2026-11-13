@@ -68,6 +68,55 @@ export function decrypt(blob: string): string {
 }
 
 /**
+ * Encrypt plaintext using AES-256-GCM with additional authenticated data.
+ *
+ * The AAD is authenticated but not encrypted: decryption fails unless the exact
+ * same AAD is supplied. This binds a ciphertext to its logical owner (for
+ * example a connection id and provider) so a token copied from one row into
+ * another cannot be decrypted.
+ *
+ * Wire format is identical to `encrypt()`: base64( iv[12] || authTag[16] || ciphertext ).
+ */
+export function encryptWithAad(plaintext: string, aad: string): string {
+  const key = getEncryptionKey();
+  const iv = randomBytes(IV_LENGTH);
+  const cipher = createCipheriv(ALGORITHM, key, iv);
+  cipher.setAAD(Buffer.from(aad, "utf8"), {
+    plaintextLength: Buffer.byteLength(plaintext, "utf8"),
+  });
+
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
+  const tag = cipher.getAuthTag();
+
+  return Buffer.concat([iv, tag, encrypted]).toString("base64");
+}
+
+/**
+ * Decrypt a blob produced by `encryptWithAad()`.
+ * Throws if the key, the ciphertext or the AAD does not match.
+ */
+export function decryptWithAad(blob: string, aad: string): string {
+  const key = getEncryptionKey();
+  const buf = Buffer.from(blob, "base64");
+
+  const iv = buf.subarray(0, IV_LENGTH);
+  const tag = buf.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
+  const ciphertext = buf.subarray(IV_LENGTH + TAG_LENGTH);
+
+  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  decipher.setAAD(Buffer.from(aad, "utf8"));
+  decipher.setAuthTag(tag);
+
+  return Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ]).toString("utf8");
+}
+
+/**
  * Hash an opaque session ID for database storage (SHA-256).
  * The plaintext ID lives only in the cookie; only its hash is stored in the DB.
  */

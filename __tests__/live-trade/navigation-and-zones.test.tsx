@@ -43,6 +43,24 @@ jest.mock("@/hooks/use-auth", () => ({
   }),
 }));
 
+const mockAppUser: jest.Mock = jest.fn(() => ({
+  userId: "bbbbbbbb-2222-4222-8222-222222222222",
+  email: "customer@example.com",
+  displayName: "Customer",
+  status: "ACTIVE" as const,
+  role: "CUSTOMER" as const,
+}));
+
+jest.mock("@/hooks/use-app-auth", () => ({
+  useAppAuth: () => ({
+    user: mockAppUser(),
+    loading: false,
+    error: null,
+    refetch: jest.fn(),
+    logout: jest.fn(),
+  }),
+}));
+
 function nearestZone(
   overrides: Partial<LiveTradeNearestZoneDto> = {}
 ): LiveTradeNearestZoneDto {
@@ -122,6 +140,33 @@ describe("Header navigation", () => {
 
     expect(screen.getAllByRole("link", { name: "Dashboard" })[0]).toBeTruthy();
     expect(screen.getAllByRole("link", { name: "Scanner" })[0]).toBeTruthy();
+
+    const subscriptionLinks = screen.getAllByRole("link", {
+      name: "Subscription",
+    });
+    expect(subscriptionLinks.length).toBeGreaterThanOrEqual(2);
+    for (const link of subscriptionLinks) {
+      expect(link.getAttribute("href")).toBe("/account/subscription");
+    }
+    expect(screen.queryByRole("link", { name: "Admin" })).toBeNull();
+  });
+
+  test("offers the administration console only to administrators", () => {
+    mockAppUser.mockReturnValue({
+      userId: "aaaaaaaa-1111-4111-8111-111111111111",
+      email: "admin@example.com",
+      displayName: "Admin",
+      status: "ACTIVE" as const,
+      role: "ADMIN" as const,
+    });
+
+    render(<Header lastRefreshed={null} />);
+
+    const adminLinks = screen.getAllByRole("link", { name: "Admin" });
+    expect(adminLinks.length).toBeGreaterThanOrEqual(2);
+    for (const link of adminLinks) {
+      expect(link.getAttribute("href")).toBe("/admin/customers");
+    }
   });
 });
 

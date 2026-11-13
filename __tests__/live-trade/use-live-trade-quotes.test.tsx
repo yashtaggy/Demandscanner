@@ -5,7 +5,8 @@
  *  - one request at a time and no request inside the 5-second server floor;
  *  - automatic polling pauses while the document is hidden;
  *  - a 429 exposes a cooldown and never retries in a tight loop;
- *  - a 401 stops polling and labels retained data sign-in required;
+ *  - a 401/409 that means the app session or Kite connection is unusable stops
+ *    polling and labels retained data accordingly;
  *  - any other failure retains the snapshot as stale without touching board
  *    data (this hook never reads the board).
  */
@@ -259,7 +260,7 @@ describe("useLiveTradeQuotes", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  test("a 401 stops automatic polling and marks retained data sign-in required", async () => {
+  test("a TOKEN_EXPIRED response stops polling and marks the broker connection required", async () => {
     fetchMock
       .mockResolvedValueOnce(okResponse(quoteEnvelope()))
       .mockResolvedValueOnce(
@@ -274,7 +275,59 @@ describe("useLiveTradeQuotes", () => {
       for (let i = 0; i < 6; i += 1) await Promise.resolve();
     });
 
+    expect(result.current.displayState).toBe("broker");
+    expect(result.current.quotes[1]).toBeDefined();
+
+    await act(async () => {
+      jest.advanceTimersByTime(120_000);
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("an app-session 401 marks sign-in required and stops polling", async () => {
+    fetchMock
+      .mockResolvedValueOnce(okResponse(quoteEnvelope()))
+      .mockResolvedValueOnce(
+        errorEnvelope(401, "UNAUTHENTICATED", "Sign in required.")
+      );
+
+    const { result } = renderHook(() => useLiveTradeQuotes([1], true));
+    await flush();
+
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+
     expect(result.current.displayState).toBe("sign-in");
+    expect(result.current.quotes[1]).toBeDefined();
+
+    await act(async () => {
+      jest.advanceTimersByTime(120_000);
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("BROKER_NOT_CONNECTED stops polling without discarding the snapshot", async () => {
+    fetchMock
+      .mockResolvedValueOnce(okResponse(quoteEnvelope()))
+      .mockResolvedValueOnce(
+        errorEnvelope(409, "BROKER_NOT_CONNECTED", "Connect Kite.")
+      );
+
+    const { result } = renderHook(() => useLiveTradeQuotes([1], true));
+    await flush();
+
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+      for (let i = 0; i < 6; i += 1) await Promise.resolve();
+    });
+
+    expect(result.current.displayState).toBe("broker");
     expect(result.current.quotes[1]).toBeDefined();
 
     await act(async () => {

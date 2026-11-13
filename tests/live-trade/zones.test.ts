@@ -38,8 +38,8 @@ const globalStore = globalThis as typeof globalThis & {
   __liveTradeDb?: unknown;
 };
 
-const OWNER_A = "owner-a" as LiveTradeOwnerId;
-const OWNER_B = "owner-b" as LiveTradeOwnerId;
+const OWNER_A = "0f8fad5b-d9cb-469f-a165-70867728950e" as LiveTradeOwnerId;
+const OWNER_B = "6f9619ff-8b86-d011-b42d-00c04fc964ff" as LiveTradeOwnerId;
 
 /** Friday 2026-11-06, 10:30 IST. */
 const NOW = new Date("2026-11-06T05:00:00.000Z");
@@ -88,8 +88,8 @@ beforeEach(() => {
   mockFake.setNow(NOW);
   mockFake.seedInstrument({ instrument_id: 1, symbol: "INFY" });
   mockFake.seedInstrument({ instrument_id: 2, symbol: "TCS" });
-  mockFake.seedItem({ owner: "owner-a", instrumentId: 1, timeframe: "1D" });
-  mockFake.seedItem({ owner: "owner-a", instrumentId: 2, timeframe: "1D" });
+  mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1, timeframe: "1D" });
+  mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 2, timeframe: "1D" });
   mockFake.seedMembership(1);
   mockFake.seedMembership(2);
   jest.spyOn(console, "error").mockImplementation(() => {});
@@ -230,7 +230,7 @@ describe("nearest zone selection", () => {
   it("falls back to another timeframe and labels it FALLBACK", async () => {
     // Replace the default 1D item for this instrument with a 4H preference.
     const owned = mockFake.items.find(
-      (item) => item.owner_user_id === "owner-a" && item.instrument_id === 1
+      (item) => item.owner_user_id === "0f8fad5b-d9cb-469f-a165-70867728950e" && item.instrument_id === 1
     );
     owned!.timeframe = "4H";
 
@@ -482,7 +482,7 @@ describe("nearest zone selection", () => {
 
   it("rejects a foreign instrument id without running zone queries", async () => {
     mockFake.seedInstrument({ instrument_id: 3, symbol: "FOREIGN" });
-    mockFake.seedItem({ owner: "owner-b", instrumentId: 3 });
+    mockFake.seedItem({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", instrumentId: 3 });
     mockFake.seedZone({ instrumentId: 3, side: "DEMAND", proximal: 100 });
 
     await expectLiveTradeError(
@@ -498,7 +498,7 @@ describe("nearest zone selection", () => {
 
     const ownerA = await getZoneOverviewsAt(NOW, OWNER_A, options());
     mockFake.seedInstrument({ instrument_id: 4, symbol: "WIPRO" });
-    mockFake.seedItem({ owner: "owner-b", instrumentId: 4 });
+    mockFake.seedItem({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", instrumentId: 4 });
     mockFake.seedZone({ instrumentId: 4, side: "DEMAND", proximal: 999 });
     const ownerB = await getZoneOverviewsAt(NOW, OWNER_B, options());
 
@@ -856,7 +856,7 @@ describe("board zone summaries", () => {
   });
 
   it("collapses repeated trade entries into one instrument summary", async () => {
-    mockFake.seedItem({ owner: "owner-a", instrumentId: 1, timeframe: "1H" });
+    mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1, timeframe: "1H" });
     mockFake.seedZone({ instrumentId: 1, side: "DEMAND", proximal: 100, score: 44 });
     mockFake.seedScanJob({
       status: "SUCCESS",
@@ -918,7 +918,7 @@ describe("expanded zones", () => {
   });
 
   it("treats repeated entries for one instrument as a single selection", async () => {
-    mockFake.seedItem({ owner: "owner-a", instrumentId: 1, timeframe: "1H" });
+    mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1, timeframe: "1H" });
 
     const result = await getZoneOverviewsAt(
       NOW,

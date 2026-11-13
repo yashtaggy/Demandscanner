@@ -11,10 +11,28 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 import { KiteConnect } from "kiteconnect";
-import { getKiteApiKey, areKiteEnvVarsSet } from "@/lib/env";
+import { getKiteApiKey, areKiteEnvVarsSet, getAppOrigin } from "@/lib/env";
+import { getAppUser } from "@/lib/auth/session";
 
+function appOrigin(req: NextRequest): string {
+  try {
+    return getAppOrigin();
+  } catch {
+    return new URL(req.url).origin;
+  }
+}
 
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
+  // Kite is a broker connection for a signed-in DemandScan user, not a login
+  // mechanism for the workspace.
+  const appUser = await getAppUser(req.headers.get("cookie"));
+  if (!appUser) {
+    return NextResponse.redirect(
+      new URL("/login?next=%2Fapi%2Fkite%2Flogin", appOrigin(req)),
+      { headers: { "Cache-Control": "no-store" } }
+    );
+  }
+
   // Verify environment is configured before attempting any redirect
   if (!areKiteEnvVarsSet()) {
     return NextResponse.json(

@@ -47,9 +47,11 @@ export type {
 };
 
 const DEFAULT_MESSAGES: Record<string, string> = {
-  UNAUTHENTICATED: "Connect your Kite account to use Live Trade.",
-  TOKEN_EXPIRED: "Your Kite session has expired. Reconnect to continue.",
+  UNAUTHENTICATED: "Sign in to DemandScan to use Live Trade.",
+  TOKEN_EXPIRED: "Your Kite connection has expired. Connect Kite again to refresh quotes.",
   FORBIDDEN: "This action is not allowed from the current page.",
+  BROKER_NOT_CONNECTED:
+    "Connect your Kite account to load live quotes. Your board is unaffected.",
   NOT_FOUND: "That record no longer exists.",
   INVALID_BODY: "Check the highlighted fields and try again.",
   INVALID_QUERY: "The request was not valid.",

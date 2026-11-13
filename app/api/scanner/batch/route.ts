@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getSessionIdFromCookies, requireSession } from '@/lib/kite-session';
+import { getSessionFromRequest, getSessionIdFromCookies } from '@/lib/kite-session';
 import { hashSessionId } from '@/lib/crypto';
+import { requireActiveSubscription } from '@/lib/subscriptions/entitlements';
+import { authErrorResponse } from '@/lib/auth/http';
 import { processScanBatch } from '@/lib/scanner/batchRunner';
 import { getScanBatchStats, getScanJob } from '@/lib/scanner/jobs';
 
@@ -18,17 +20,18 @@ export const maxDuration = 60;
  */
 export async function POST(req: NextRequest) {
   const cookie = req.headers.get('cookie');
-  let session;
+  let user;
   try {
-    session = await requireSession(cookie);
-  } catch {
-    return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
+    user = (await requireActiveSubscription(cookie)).user;
+  } catch (err) {
+    return authErrorResponse(err);
   }
+
+  // Legacy Kite context is optional: it can adopt a pre-Phase-2 job and feed the
+  // staging-only customer-session market-data fallback. It is never required.
   const sessionId = getSessionIdFromCookies(cookie);
-  if (!sessionId) {
-    return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
-  }
-  const sessionIdHash = hashSessionId(sessionId);
+  const sessionIdHash = sessionId ? hashSessionId(sessionId) : null;
+  const session = await getSessionFromRequest(cookie);
 
   let jobId: string | undefined;
   try {
@@ -42,6 +45,7 @@ export async function POST(req: NextRequest) {
 
   const result = await processScanBatch({
     jobId,
+    userId: user.userId,
     sessionIdHash,
     session,
   });

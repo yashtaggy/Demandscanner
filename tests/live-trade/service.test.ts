@@ -32,7 +32,7 @@ jest.mock("@/lib/db", () => ({
   getDb: () => globalStore.__liveTradeDb,
 }));
 
-const OWNER_A = "owner-a" as LiveTradeOwnerId;
+const OWNER_A = "0f8fad5b-d9cb-469f-a165-70867728950e" as LiveTradeOwnerId;
 
 async function expectLiveTradeError(
   promise: Promise<unknown>,
@@ -101,7 +101,7 @@ describe("group inputs", () => {
 
   it("rejects a client-supplied owner field", async () => {
     const error = await expectLiveTradeError(
-      createGroup(OWNER_A, { name: "Tech", ownerUserId: "owner-b" }),
+      createGroup(OWNER_A, { name: "Tech", ownerUserId: "6f9619ff-8b86-d011-b42d-00c04fc964ff" }),
       "INVALID_BODY"
     );
     expect(error.message).toBe(
@@ -213,7 +213,7 @@ describe("item inputs", () => {
     const item = await createItem(OWNER_A, { instrumentId: 1 });
 
     for (const body of [
-      { version: item.version, ownerUserId: "owner-b" },
+      { version: item.version, ownerUserId: "6f9619ff-8b86-d011-b42d-00c04fc964ff" },
       { version: item.version, instrumentId: 2 },
       { version: item.version, sortOrder: 9 },
     ]) {
@@ -255,7 +255,7 @@ describe("item inputs", () => {
 
   it("returns NOT_FOUND for another owner's item", async () => {
     const foreign = mockFake.seedItem({
-      owner: "owner-b",
+      owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff",
       instrumentId: 2,
     });
     await expectLiveTradeError(

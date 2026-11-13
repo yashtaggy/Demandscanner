@@ -35,8 +35,8 @@ const globalStore = globalThis as typeof globalThis & {
   __liveTradeDb?: unknown;
 };
 
-const OWNER_A = "owner-a" as LiveTradeOwnerId;
-const OWNER_B = "owner-b" as LiveTradeOwnerId;
+const OWNER_A = "0f8fad5b-d9cb-469f-a165-70867728950e" as LiveTradeOwnerId;
+const OWNER_B = "6f9619ff-8b86-d011-b42d-00c04fc964ff" as LiveTradeOwnerId;
 
 /** Friday 2026-11-06, 10:30 IST. */
 const NOW_OPEN = new Date("2026-11-06T05:00:00.000Z");
@@ -45,7 +45,7 @@ const NOW_CLOSED = new Date("2026-11-06T11:00:00.000Z");
 
 const SESSION: KiteSession = {
   accessToken: "server-side-access-token",
-  userId: "owner-a",
+  userId: "0f8fad5b-d9cb-469f-a165-70867728950e",
   userName: "Owner A",
   email: "owner-a@example.com",
   loginTime: "2026-11-06T03:00:00.000Z",
@@ -110,8 +110,8 @@ beforeEach(() => {
   globalStore.__liveTradeDb = mockFake.sql;
   mockFake.seedInstrument({ instrument_id: 1, symbol: "INFY" });
   mockFake.seedInstrument({ instrument_id: 2, symbol: "TCS" });
-  mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
-  mockFake.seedItem({ owner: "owner-a", instrumentId: 2 });
+  mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
+  mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 2 });
   mockFake.setNow(NOW_OPEN);
   jest.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -370,7 +370,7 @@ describe("quote service", () => {
   });
 
   it("requests repeated entries for one instrument only once", async () => {
-    mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
     const provider = providerReturning({
       "NSE:INFY": quoteData(),
       "NSE:TCS": quoteData(),
@@ -409,7 +409,7 @@ describe("quote service", () => {
 
   it("rejects a valid but foreign instrument id without a provider call", async () => {
     mockFake.seedInstrument({ instrument_id: 3, symbol: "FOREIGN" });
-    mockFake.seedItem({ owner: "owner-b", instrumentId: 3 });
+    mockFake.seedItem({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", instrumentId: 3 });
     const provider = providerReturning({});
 
     await expectLiveTradeError(
@@ -1060,7 +1060,7 @@ describe("per-owner quote cooldown", () => {
     const provider = providerReturning({ "NSE:INFY": quoteData() });
     await getLiveQuotesAt(NOW_OPEN, OWNER_A, SESSION, [1], provider);
 
-    expect(mockFake.quoteState.get("owner-a")).toEqual(NOW_OPEN);
+    expect(mockFake.quoteState.get("0f8fad5b-d9cb-469f-a165-70867728950e")).toEqual(NOW_OPEN);
     expect(mockFake.quoteState.size).toBe(1);
     expect(mockFake.standaloneMarkers).toEqual([
       "list-quote-instruments",
@@ -1111,15 +1111,15 @@ describe("per-owner quote cooldown", () => {
 
   it("keeps owners independent", async () => {
     mockFake.seedInstrument({ instrument_id: 3, symbol: "WIPRO" });
-    mockFake.seedItem({ owner: "owner-b", instrumentId: 3 });
+    mockFake.seedItem({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", instrumentId: 3 });
     const provider = providerReturning({ "NSE:INFY": quoteData(), "NSE:WIPRO": quoteData() });
 
     await getLiveQuotesAt(NOW_OPEN, OWNER_A, SESSION, undefined, provider);
     const other = await getLiveQuotesAt(NOW_OPEN, OWNER_B, SESSION, undefined, provider);
 
     expect(other.quotes.map((row) => row.symbol)).toEqual(["WIPRO"]);
-    expect(mockFake.quoteState.has("owner-a")).toBe(true);
-    expect(mockFake.quoteState.has("owner-b")).toBe(true);
+    expect(mockFake.quoteState.has("0f8fad5b-d9cb-469f-a165-70867728950e")).toBe(true);
+    expect(mockFake.quoteState.has("6f9619ff-8b86-d011-b42d-00c04fc964ff")).toBe(true);
   });
 
   it("allows exactly one of two concurrent same-owner requests", async () => {

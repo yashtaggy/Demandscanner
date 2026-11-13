@@ -9,6 +9,7 @@ jest.mock('@/lib/db', () => ({
 }));
 
 import {
+  createScanJob,
   findActiveScanJob,
   getScanBatchStats,
   retireStaleScanJobs,
@@ -124,5 +125,43 @@ describe('getScanBatchStats', () => {
       maxDurationMs: 0,
       byStage: [],
     });
+  });
+});
+
+
+describe('Phase 2 app-user ownership', () => {
+  const userId = '00000000-0000-4000-8000-000000000001';
+
+  test('createScanJob persists the internal user id, not the Firebase UID', async () => {
+    await createScanJob('cfg-1', { initiatorUserId: userId });
+    expect(statements[0].text).toContain('initiator_user_id');
+    expect(statements[0].values).toContain(userId);
+  });
+
+  test('findActiveScanJob prefers the app user and still adopts a legacy job for the same browser', async () => {
+    await findActiveScanJob({ userId, sessionIdHash: 'hash:sid' });
+    const { text, values } = statements[0];
+    expect(text).toContain('initiator_user_id = ?');
+    expect(text).toContain('initiator_user_id IS NULL AND session_id_hash = ?');
+    expect(values).toEqual([userId, 'hash:sid']);
+  });
+
+  test('findActiveScanJob with only a user id never matches another user’s job', async () => {
+    await findActiveScanJob({ userId });
+    const { text, values } = statements[0];
+    expect(text).toContain('initiator_user_id = ?');
+    expect(text).not.toContain('session_id_hash = ?');
+    expect(values).toEqual([userId]);
+  });
+
+  test('retireStaleScanJobs scopes abandonment to the app user and legacy hash', async () => {
+    mockRows = [{ job_id: 'a' }];
+    const count = await retireStaleScanJobs({ userId, sessionIdHash: 'hash:sid' });
+    expect(count).toBe(1);
+    const { text, values } = statements[0];
+    expect(text).toContain('initiator_user_id = ?');
+    expect(text).toContain('session_id_hash = ?');
+    expect(values).toContain(userId);
+    expect(values).toContain('hash:sid');
   });
 });

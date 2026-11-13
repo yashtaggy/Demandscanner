@@ -1,12 +1,11 @@
 /**
  * Live Trade domain types — request shapes and the resolved owner identity.
  *
- * Repositories (Phase 3) accept `LiveTradeOwnerId` instead of a raw string so
- * an owner value can only originate from `resolveLiveTradeOwner`, which reads
- * the server-side Kite session.
+ * Repositories accept `LiveTradeOwnerId` instead of a raw string so an owner
+ * value can only originate from `resolveLiveTradeOwner`, which resolves the
+ * internal DemandScan user from the app session.
  */
 
-import type { KiteSession } from "@/lib/types";
 import type {
   LiveTradeDirection,
   LiveTradePriority,
@@ -15,8 +14,9 @@ import type {
 } from "./constants";
 
 /**
- * Branded owner identifier. A plain `string` is not assignable to it — the only
- * producer is the session-based resolver in ./ownership.
+ * Branded owner identifier — an `app_users.user_id` UUID. A plain `string` is
+ * not assignable to it; the only producer is the app-session resolver in
+ * ./ownership.
  */
 export type LiveTradeOwnerId = string & {
   readonly __brand: "LiveTradeOwnerId";
@@ -24,8 +24,6 @@ export type LiveTradeOwnerId = string & {
 
 export interface LiveTradeOwnerContext {
   ownerId: LiveTradeOwnerId;
-  /** Verified session; provides the Kite access token for quote retrieval. */
-  session: KiteSession;
 }
 
 /** Normalized, validated create payload. Every field has a concrete value. */

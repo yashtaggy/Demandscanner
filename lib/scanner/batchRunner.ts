@@ -9,6 +9,21 @@
 
 import { randomUUID } from 'crypto';
 import type { KiteSession } from '@/lib/types';
+import {
+  isMarketDataContext,
+  type MarketDataInput,
+} from '@/lib/market-data/context';
+import {
+  markMarketDataContextUsed,
+  resolveMarketDataContext,
+} from '@/lib/market-data/credentials';
+import {
+  acquireGlobalIngestionLock,
+  releaseGlobalIngestionLock,
+  type GlobalIngestionLock,
+} from '@/lib/market-data/lock';
+import type { MarketDataContext } from '@/lib/market-data/types';
+import { MarketDataUnavailableError } from '@/lib/market-data/errors';
 import { DEFAULT_SCANNER_CONFIG } from './types';
 import type { ScanJobRow, ScanJobStatus, ScanStage } from './jobs';
 import {
@@ -107,6 +122,18 @@ export interface ScanWorkers {
   snapshots: typeof buildLatestSnapshots;
   lifecycles: typeof updateZoneLifecycles;
   loadSession: typeof getSessionByIdHash;
+  /**
+   * Resolves the market-data context for provider stages. Optional so existing
+   * callers/tests that pass a session through keep working; the default worker
+   * prefers the system connection and falls back per policy.
+   */
+  resolveMarketData?: (
+    session: KiteSession | null
+  ) => Promise<MarketDataContext | null>;
+  /** Global ingestion lease. Optional for tests that exercise batch flow only. */
+  acquireIngestionLock?: () => Promise<GlobalIngestionLock | null>;
+  releaseIngestionLock?: (lock: GlobalIngestionLock) => Promise<boolean>;
+  markMarketDataUsed?: (context: MarketDataContext) => Promise<void>;
 }
 
 export interface ScanJobStore {
@@ -131,6 +158,11 @@ const defaultWorkers: ScanWorkers = {
   snapshots: buildLatestSnapshots,
   lifecycles: updateZoneLifecycles,
   loadSession: getSessionByIdHash,
+  resolveMarketData: async (session) =>
+    resolveMarketDataContext({ provider: 'KITE', session }),
+  acquireIngestionLock: () => acquireGlobalIngestionLock(),
+  releaseIngestionLock: releaseGlobalIngestionLock,
+  markMarketDataUsed: markMarketDataContextUsed,
 };
 
 const defaultStore: ScanJobStore = {
@@ -180,9 +212,32 @@ function asDate(value: Date | string | null | undefined, fallback: Date): Date {
   return Number.isNaN(d.getTime()) ? fallback : d;
 }
 
+/** Best-effort "system connection was used successfully" marker. */
+async function recordMarketDataUse(
+  marketData: MarketDataInput,
+  workers: ScanWorkers
+): Promise<void> {
+  if (!isMarketDataContext(marketData) || !workers.markMarketDataUsed) return;
+  try {
+    await workers.markMarketDataUsed(marketData);
+  } catch (err) {
+    const message = err instanceof Error ? err.message.slice(0, 200) : 'unknown';
+    console.warn(`[scanner] failed to record market-data use: ${message}`);
+  }
+}
+
 function isRunnableStatus(status: ScanJobStatus): boolean {
   return status === 'PENDING' || status === 'RUNNING';
 }
+
+/** Stages that call the market-data provider and therefore need the global lease. */
+const PROVIDER_STAGES: ReadonlySet<ScanStage> = new Set<ScanStage>([
+  'SYNC_INSTRUMENTS',
+  'INGEST_DAILY',
+  'INGEST_HOURLY',
+]);
+
+const INGESTION_CONTENTION_RETRY_MS = 15_000;
 
 /**
  * A legitimate Nifty 500 scan cannot exceed a few hundred instruments. Any
@@ -199,6 +254,7 @@ function isLegacyFullScanUniverse(job: ScanJobRow): boolean {
 
 async function unclaimedResult(
   jobId: string | undefined,
+  userId: string | null,
   sessionIdHash: string | null,
   store: ScanJobStore
 ): Promise<ScanBatchResult> {
@@ -221,7 +277,10 @@ async function unclaimedResult(
   const raw = await store.getJob(jobId);
   if (!raw) return empty;
   const job = mapScanJobRow(raw);
-  if (sessionIdHash && job.session_id_hash && job.session_id_hash !== sessionIdHash) {
+  if (job.initiator_user_id) {
+    if (job.initiator_user_id !== userId) return empty;
+  } else if (!sessionIdHash || !job.session_id_hash || job.session_id_hash !== sessionIdHash) {
+    // Legacy job: only the exact Kite session that created it may see it.
     return empty;
   }
 
@@ -240,6 +299,7 @@ async function unclaimedResult(
 export async function processScanBatch(
   opts: {
     jobId?: string;
+    userId?: string | null;
     sessionIdHash?: string | null;
     session?: KiteSession | null;
     leaseOwner?: string;
@@ -250,12 +310,18 @@ export async function processScanBatch(
   const leaseOwner = opts.leaseOwner ?? randomUUID();
   let claimed = await store.claim({
     jobId: opts.jobId,
+    userId: opts.userId,
     sessionIdHash: opts.sessionIdHash,
     leaseOwner,
   });
 
   if (!claimed) {
-    return unclaimedResult(opts.jobId, opts.sessionIdHash ?? null, store);
+    return unclaimedResult(
+      opts.jobId,
+      opts.userId ?? null,
+      opts.sessionIdHash ?? null,
+      store
+    );
   }
 
   // Jobs persisted by the pre-V1 code resolved a full scan to every active
@@ -290,6 +356,40 @@ export async function processScanBatch(
     retryAfterMs: null,
     job: claimed,
   };
+
+  // Provider stages must not overlap across jobs or instances. Contention is
+  // not a failure: release the job lease and let the browser retry the same
+  // checkpoint, so a second scan never duplicates provider calls.
+  let ingestionLock: GlobalIngestionLock | null = null;
+  if (PROVIDER_STAGES.has(claimed.current_stage) && workers.acquireIngestionLock) {
+    ingestionLock = await workers.acquireIngestionLock();
+    if (!ingestionLock) {
+      const persisted = await store.persist({
+        jobId: claimed.job_id,
+        status: 'RUNNING',
+        stage: claimed.current_stage,
+        cursorInstrumentId: claimed.cursor_instrument_id,
+        processedInstruments: claimed.processed_instruments,
+        totalInstruments: claimed.total_instruments,
+        progressPercent: claimed.progress_percent,
+        retryCount: claimed.retry_count,
+        instrumentIds: claimed.instrument_ids,
+        errorMessage: null,
+        completedAt: null,
+      });
+      console.info(
+        `[scanner] ingestion lease busy; deferring jobId=${claimed.job_id} ` +
+          `stage=${claimed.current_stage} retryAfterMs=${INGESTION_CONTENTION_RETRY_MS}`
+      );
+      return {
+        ...empty,
+        status: 'RUNNING',
+        moreRemaining: true,
+        retryAfterMs: INGESTION_CONTENTION_RETRY_MS,
+        job: persisted ?? claimed,
+      };
+    }
+  }
 
   const batchStartedAt = Date.now();
   const batchId = await store.insertBatch({
@@ -340,7 +440,7 @@ export async function processScanBatch(
       retryAfterMs: null,
       job: persisted ?? claimed,
     };
-  } catch (err: any) {
+  } catch (err) {
     const message = sanitizeErrorMessage(err);
     const durationMs = Date.now() - batchStartedAt;
     await store.failBatch(batchId, message);
@@ -380,6 +480,15 @@ export async function processScanBatch(
       retryAfterMs: exhausted ? null : backoffMs(retries),
       job: persisted ?? claimed,
     };
+  } finally {
+    if (ingestionLock && workers.releaseIngestionLock) {
+      try {
+        await workers.releaseIngestionLock(ingestionLock);
+      } catch (err) {
+        const message = err instanceof Error ? err.message.slice(0, 200) : 'unknown';
+        console.warn(`[scanner] failed to release ingestion lease: ${message}`);
+      }
+    }
   }
 }
 
@@ -404,13 +513,21 @@ async function executeClaimedBatch(
     providedSession ??
     (job.session_id_hash ? await workers.loadSession(job.session_id_hash) : null);
 
-  const needsSession =
-    job.current_stage === 'SYNC_INSTRUMENTS' ||
-    job.current_stage === 'INGEST_DAILY' ||
-    job.current_stage === 'INGEST_HOURLY';
+  const needsProvider = PROVIDER_STAGES.has(job.current_stage);
 
-  if (needsSession && !session) {
-    throw new Error('Kite session expired or missing; reconnect Zerodha and resume the scan.');
+  // Provider stages use the resolved system connection when available. The
+  // compatibility path falls back to the customer session per policy, so the
+  // browser-driven worker never hard-depends on a particular customer token.
+  let marketData: MarketDataInput | null = session;
+  if (needsProvider && workers.resolveMarketData) {
+    marketData = (await workers.resolveMarketData(session)) ?? session;
+  }
+
+  if (needsProvider && !marketData) {
+    throw new MarketDataUnavailableError(
+      'Market data is unavailable: no system market-data connection is configured. ' +
+        'Ask an administrator to configure one, then resume the scan.'
+    );
   }
 
   const now = new Date();
@@ -418,7 +535,7 @@ async function executeClaimedBatch(
   const toDate = asDate(job.to_date, now);
 
   if (job.current_stage === 'SYNC_INSTRUMENTS') {
-    return runSyncStage(job, session!, workers);
+    return runSyncStage(job, marketData!, workers);
   }
 
   const ids = await ensureInstrumentUniverse(job, workers);
@@ -441,10 +558,10 @@ async function executeClaimedBatch(
   for (const id of batch) {
     switch (job.current_stage) {
       case 'INGEST_DAILY':
-        await workers.ingestDaily(session!, id, fromDate, toDate);
+        await workers.ingestDaily(marketData!, id, fromDate, toDate);
         break;
       case 'INGEST_HOURLY':
-        await workers.ingestHourly(session!, id, fromDate, toDate);
+        await workers.ingestHourly(marketData!, id, fromDate, toDate);
         break;
       case 'AGGREGATE_DAILY':
         await workers.aggregateDaily(id);
@@ -463,6 +580,10 @@ async function executeClaimedBatch(
     `[scanner] stage=${job.current_stage} instruments=${batch.length} ` +
       `cursor=${job.cursor_instrument_id}->${nextCursor} durationMs=${Date.now() - stageStartedAt}`
   );
+
+  if (PROVIDER_STAGES.has(job.current_stage) && batch.length > 0) {
+    await recordMarketDataUse(marketData!, workers);
+  }
 
   return advanceAfterInstrumentBatch(job, ids, nextCursor, done, batch.length);
 }
@@ -498,7 +619,7 @@ function advanceToIngest(ids: number[], processedInBatch: number): InternalAdvan
 
 async function runSyncStage(
   job: ScanJobRow,
-  session: KiteSession,
+  marketData: MarketDataInput,
   workers: ScanWorkers
 ): Promise<InternalAdvance> {
   const alreadyResolved = await tryResolveUniverseWithoutSync(job, workers);
@@ -532,7 +653,8 @@ async function runSyncStage(
     }
   }
 
-  const sync = await workers.syncMaster(session);
+  const sync = await workers.syncMaster(marketData);
+  await recordMarketDataUse(marketData, workers);
   const ids = await resolveUniverseAfterSync(job, workers);
 
   return advanceToIngest(ids, sync.upserted);

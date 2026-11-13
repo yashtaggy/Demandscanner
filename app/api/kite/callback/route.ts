@@ -29,9 +29,11 @@ import { getKiteApiKey, getKiteApiSecret, getAppOrigin } from "@/lib/env";
 import {
   sessionStore,
   computeKiteTokenExpiry,
+  bindSessionToAppUser,
   SESSION_COOKIE_NAME,
   SESSION_COOKIE_OPTIONS,
 } from "@/lib/kite-session";
+import { getAppUser } from "@/lib/auth/session";
 import type { KiteSession } from "@/lib/types";
 
 const SENSITIVE_HEADERS = {
@@ -56,6 +58,14 @@ function safeRedirect(path: string, req: NextRequest): NextResponse {
 }
 
 export async function GET(req: NextRequest) {
+  // A Kite connection is always started from an authenticated DemandScan app
+  // session and is bound to that internal user. Kite identity never becomes an
+  // ownership key.
+  const appUser = await getAppUser(req.headers.get("cookie"));
+  if (!appUser) {
+    return safeRedirect("/login?next=%2Fapi%2Fkite%2Flogin", req);
+  }
+
   const { searchParams } = new URL(req.url);
 
   const status = searchParams.get("status");
@@ -81,6 +91,7 @@ export async function GET(req: NextRequest) {
   }
 
   // ─── Exchange request_token for access_token ─────────────────────────────────
+  let createdSessionId: string | null = null;
   try {
     const apiKey = getKiteApiKey();
     const apiSecret = getKiteApiSecret();
@@ -110,13 +121,14 @@ export async function GET(req: NextRequest) {
     // ─── Generate opaque session ID ────────────────────────────────────────────
     // randomUUID() is cryptographically secure (uses /dev/urandom / CryptGenRandom)
     const sessionId = randomUUID();
+    createdSessionId = sessionId;
 
     // ─── Persist to database ───────────────────────────────────────────────────
     await sessionStore.set(sessionId, kiteSession);
+    await bindSessionToAppUser(sessionId, appUser.userId);
 
     console.log(
-      `[kite/callback] Session established for user=${kiteSession.userId} ` +
-        `expires=${kiteSession.expiresAt}`
+      `[kite/callback] Kite session bound to app user expires=${kiteSession.expiresAt}`
     );
 
     // ─── Issue secure cookie and redirect ─────────────────────────────────────
@@ -130,6 +142,10 @@ export async function GET(req: NextRequest) {
     const message = err instanceof Error ? err.message : "Unknown error";
     // Log safely — never log request_token, access_token, or api_secret
     console.error(`[kite/callback] Session generation failed: ${message}`);
+
+    if (createdSessionId) {
+      await sessionStore.clear(createdSessionId).catch(() => undefined);
+    }
 
     return safeRedirect("/?auth_error=session_failed", req);
   }

@@ -109,6 +109,8 @@ const EXPECTED_SCHEMA = {
     'lease_expires_at',
     'total_instruments',
     'processed_instruments',
+    // 2026-11-12 Phase 2 Firebase authentication
+    'initiator_user_id',
   ],
   ingestion_checkpoints: ['instrument_id', 'last_candle_date', 'updated_at'],
 
@@ -232,6 +234,137 @@ const EXPECTED_SCHEMA = {
     'owner_user_id',
     'last_request_at',
     'updated_at',
+  ],
+
+  // 2026-11-13-live-trade-internal-ownership.sql
+  kite_session_bindings: [
+    'session_id_hash',
+    'app_user_id',
+    'created_at',
+  ],
+
+  // 2026-11-12-add-internal-identity-foundation.sql
+  app_users: [
+    'user_id',
+    'email',
+    'display_name',
+    'status',
+    // 2026-11-12 Phase 2 Firebase authentication
+    'role',
+    'created_at',
+    'updated_at',
+  ],
+  user_identities: [
+    'identity_id',
+    'user_id',
+    'provider',
+    'provider_user_id',
+    'created_at',
+    'updated_at',
+  ],
+  admin_audit_log: [
+    'audit_id',
+    'actor_user_id',
+    'action',
+    'target_entity_type',
+    'target_entity_id',
+    'metadata',
+    'created_at',
+  ],
+  instrument_aliases: [
+    'alias_id',
+    'instrument_id',
+    'provider',
+    'provider_instrument_key',
+    'exchange',
+    'trading_symbol',
+    'instrument_type',
+    'segment',
+    'created_at',
+    'updated_at',
+  ],
+
+  // 2026-11-12-add-phase1-5-broker-market-data.sql
+  market_data_connections: [
+    'connection_id',
+    'provider',
+    'designation',
+    'label',
+    'encrypted_access_token',
+    'encrypted_refresh_token',
+    'token_expires_at',
+    'status',
+    'provider_metadata',
+    'last_successful_use_at',
+    'created_at',
+    'updated_at',
+  ],
+  market_data_oauth_states: [
+    'state_hash',
+    'provider',
+    'created_at',
+    'expires_at',
+    'consumed_at',
+  ],
+  global_ingestion_locks: [
+    'lock_name',
+    'lease_owner',
+    'acquired_at',
+    'heartbeat_at',
+    'lease_expires_at',
+    'released_at',
+  ],
+
+  // 2026-11-12-add-phase2-firebase-auth.sql
+  auth_rate_limits: [
+    'rate_key',
+    'window_started_at',
+    'attempt_count',
+    'updated_at',
+  ],
+
+  // 2026-11-13-phase4-subscriptions.sql
+  subscription_plans: [
+    'plan_id',
+    'name',
+    'description',
+    'duration_days',
+    'price',
+    'currency',
+    'status',
+    'created_at',
+    'updated_at',
+  ],
+  customer_subscriptions: [
+    'subscription_id',
+    'user_id',
+    'plan_id',
+    'start_date',
+    'end_date',
+    'status',
+    'created_by',
+    'activated_at',
+    'activated_by',
+    'cancelled_at',
+    'cancelled_by',
+    'cancellation_reason',
+    'renewed_from_subscription_id',
+    'created_at',
+    'updated_at',
+  ],
+  payment_records: [
+    'payment_id',
+    'user_id',
+    'subscription_id',
+    'amount',
+    'currency',
+    'payment_method',
+    'payment_reference',
+    'payment_date',
+    'payment_status',
+    'notes',
+    'recorded_by',
+    'created_at',
   ],
 };
 

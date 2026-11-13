@@ -15,9 +15,33 @@ const mockRefetch = jest.fn();
 const mockLaunch = jest.fn();
 const mockResetJob = jest.fn();
 
-jest.mock('@/hooks/use-auth', () => ({
-  useAuth: () => ({
-    status: { authenticated: true },
+jest.mock('@/hooks/use-app-auth', () => ({
+  useAppAuth: () => ({
+    user: {
+      userId: '00000000-0000-4000-8000-000000000001',
+      email: 'customer@example.com',
+      displayName: 'Customer',
+      status: 'ACTIVE',
+      role: 'CUSTOMER',
+    },
+    loading: false,
+    error: null,
+    refetch: jest.fn(),
+    logout: jest.fn(),
+  }),
+}));
+
+jest.mock('@/hooks/use-subscription', () => ({
+  useSubscription: () => ({
+    data: {
+      ok: true,
+      subscriptionRequired: true,
+      entitled: true,
+      today: '2026-11-13',
+      current: null,
+      history: [],
+      payments: [],
+    },
     loading: false,
     error: null,
     refetch: jest.fn(),

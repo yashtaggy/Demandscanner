@@ -19,8 +19,8 @@ jest.mock("next/server", () => ({
   },
 }));
 
-jest.mock("@/lib/kite-session", () => ({
-  getSessionFromRequest: jest.fn(),
+jest.mock("@/lib/subscriptions/entitlements", () => ({
+  requireActiveSubscription: jest.fn(),
 }));
 
 jest.mock("@/lib/db", () => ({
@@ -28,7 +28,8 @@ jest.mock("@/lib/db", () => ({
 }));
 
 import type { NextRequest } from "next/server";
-import { getSessionFromRequest } from "@/lib/kite-session";
+import { requireActiveSubscription } from "@/lib/subscriptions/entitlements";
+import type { AppUser } from "@/lib/auth/types";
 import { POST as createItemRoute } from "@/app/api/live-trade/items/route";
 import {
   DELETE as deleteItemRoute,
@@ -51,7 +52,7 @@ const globalStore = globalThis as typeof globalThis & {
   __liveTradeDb?: unknown;
 };
 
-const sessionMock = getSessionFromRequest as jest.Mock;
+const appUserMock = requireActiveSubscription as jest.Mock;
 
 // Every test asserts a specific part of this JSON envelope structurally.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,8 +116,23 @@ async function callDynamic<T extends Record<string, string>>(
   return { status: res.status, headers: res.headers, body: await res.json() };
 }
 
-function signIn(): void {
-  sessionMock.mockResolvedValue({ userId: "owner-a" } as unknown as never);
+const OWNER_ID = "0f8fad5b-d9cb-469f-a165-70867728950e";
+
+function appUser(userId = OWNER_ID): AppUser {
+  return {
+    userId,
+    email: "owner@example.com",
+    displayName: null,
+    status: "ACTIVE",
+    role: "CUSTOMER",
+  };
+}
+
+function signIn(userId = OWNER_ID): void {
+  appUserMock.mockResolvedValue({
+    user: appUser(userId),
+    subscription: { entitled: true, today: "2026-11-13", current: null, history: [] },
+  });
 }
 
 function itemBody(overrides: Record<string, unknown> = {}) {
@@ -150,7 +166,7 @@ beforeEach(() => {
     exchange: "BSE",
   });
 
-  sessionMock.mockReset();
+  appUserMock.mockReset();
   signIn();
   process.env.NEXT_PUBLIC_APP_URL = "https://app.example";
   jest.spyOn(console, "error").mockImplementation(() => {});
@@ -191,7 +207,7 @@ describe("POST /api/live-trade/items", () => {
       notes: "",
     });
     expect(mockFake.items).toHaveLength(1);
-    expect(mockFake.items[0].owner_user_id).toBe("owner-a");
+    expect(mockFake.items[0].owner_user_id).toBe("0f8fad5b-d9cb-469f-a165-70867728950e");
   });
 
   it("keeps explicit null timeframe as Any", async () => {
@@ -209,7 +225,7 @@ describe("POST /api/live-trade/items", () => {
   });
 
   it("creates a second independent entry for an instrument already on the board", async () => {
-    mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
     const { status, body } = await call(
       createItemRoute,
       request("/api/live-trade/items", { method: "POST", body: itemBody() })
@@ -219,7 +235,7 @@ describe("POST /api/live-trade/items", () => {
     expect(body.data.instrumentId).toBe(1);
     expect(body.data.symbol).toBe("INFY");
     const ownerItems = mockFake.items.filter(
-      (item) => item.owner_user_id === "owner-a"
+      (item) => item.owner_user_id === "0f8fad5b-d9cb-469f-a165-70867728950e"
     );
     expect(ownerItems).toHaveLength(2);
     expect(new Set(ownerItems.map((item) => item.item_id)).size).toBe(2);
@@ -262,7 +278,7 @@ describe("POST /api/live-trade/items", () => {
   });
 
   it("rejects another owner's group with 422 INVALID_GROUP", async () => {
-    const foreign = mockFake.seedGroup({ owner: "owner-b", name: "Theirs" });
+    const foreign = mockFake.seedGroup({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", name: "Theirs" });
     const { status, body } = await call(
       createItemRoute,
       request("/api/live-trade/items", {
@@ -287,7 +303,7 @@ describe("POST /api/live-trade/items", () => {
   });
 
   it("attaches an item to an owned group", async () => {
-    const group = mockFake.seedGroup({ owner: "owner-a", name: "Momentum" });
+    const group = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Momentum" });
     const { status, body } = await call(
       createItemRoute,
       request("/api/live-trade/items", {
@@ -318,7 +334,7 @@ describe("POST /api/live-trade/items", () => {
   it("rejects an item limit overrun with 409", async () => {
     for (let index = 0; index < 200; index += 1) {
       mockFake.seedItem({
-        owner: "owner-a",
+        owner: "0f8fad5b-d9cb-469f-a165-70867728950e",
         instrumentId: 1000 + index,
       });
     }
@@ -382,7 +398,7 @@ describe("POST /api/live-trade/items", () => {
 
 describe("PATCH /api/live-trade/items/[itemId]", () => {
   it("updates one field and preserves an omitted timeframe", async () => {
-    const item = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    const item = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
     const { status, body } = await callDynamic(
       patchItemRoute,
       request(`/api/live-trade/items/${item.item_id}`, {
@@ -398,7 +414,7 @@ describe("PATCH /api/live-trade/items/[itemId]", () => {
   });
 
   it("distinguishes omitted timeframe from explicit null", async () => {
-    const item = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    const item = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
 
     const cleared = await callDynamic(
       patchItemRoute,
@@ -424,9 +440,9 @@ describe("PATCH /api/live-trade/items/[itemId]", () => {
   });
 
   it("clears a group with an explicit null", async () => {
-    const group = mockFake.seedGroup({ owner: "owner-a", name: "Momentum" });
+    const group = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Momentum" });
     const item = mockFake.seedItem({
-      owner: "owner-a",
+      owner: "0f8fad5b-d9cb-469f-a165-70867728950e",
       instrumentId: 1,
       groupId: group.group_id,
     });
@@ -442,7 +458,7 @@ describe("PATCH /api/live-trade/items/[itemId]", () => {
   });
 
   it("rejects a stale version with 409 and the current version", async () => {
-    const item = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    const item = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
     const { status, body } = await callDynamic(
       patchItemRoute,
       request(`/api/live-trade/items/${item.item_id}`, {
@@ -457,7 +473,7 @@ describe("PATCH /api/live-trade/items/[itemId]", () => {
   });
 
   it("returns 404 for a missing or foreign item", async () => {
-    const foreign = mockFake.seedItem({ owner: "owner-b", instrumentId: 2 });
+    const foreign = mockFake.seedItem({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", instrumentId: 2 });
     for (const itemId of [FOREIGN_UUID, foreign.item_id]) {
       const { status, body } = await callDynamic(
         patchItemRoute,
@@ -489,7 +505,7 @@ describe("PATCH /api/live-trade/items/[itemId]", () => {
   });
 
   it("rejects immutable and server-controlled fields", async () => {
-    const item = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    const item = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
     for (const field of ["instrumentId", "ownerUserId", "sortOrder", "itemId"]) {
       const { status, body } = await callDynamic(
         patchItemRoute,
@@ -505,8 +521,8 @@ describe("PATCH /api/live-trade/items/[itemId]", () => {
   });
 
   it("rejects a group owned by another user with 422", async () => {
-    const foreign = mockFake.seedGroup({ owner: "owner-b", name: "Theirs" });
-    const item = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    const foreign = mockFake.seedGroup({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", name: "Theirs" });
+    const item = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
     const { status, body } = await callDynamic(
       patchItemRoute,
       request(`/api/live-trade/items/${item.item_id}`, {
@@ -520,7 +536,7 @@ describe("PATCH /api/live-trade/items/[itemId]", () => {
   });
 
   it("requires at least one mutable field and a version", async () => {
-    const item = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    const item = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
     const noFields = await callDynamic(
       patchItemRoute,
       request(`/api/live-trade/items/${item.item_id}`, {
@@ -547,7 +563,7 @@ describe("PATCH /api/live-trade/items/[itemId]", () => {
 
 describe("DELETE /api/live-trade/items/[itemId]", () => {
   it("deletes the item with a matching version", async () => {
-    const item = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    const item = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
     const { status, body } = await callDynamic(
       deleteItemRoute,
       request(`/api/live-trade/items/${item.item_id}?version=1`, {
@@ -561,7 +577,7 @@ describe("DELETE /api/live-trade/items/[itemId]", () => {
   });
 
   it("requires a valid version query parameter", async () => {
-    const item = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    const item = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
     for (const search of ["", "?version=", "?version=abc", "?version=0", "?version=1.5"]) {
       const { status, body } = await callDynamic(
         deleteItemRoute,
@@ -577,7 +593,7 @@ describe("DELETE /api/live-trade/items/[itemId]", () => {
   });
 
   it("returns 404 for a foreign or missing item", async () => {
-    const foreign = mockFake.seedItem({ owner: "owner-b", instrumentId: 2 });
+    const foreign = mockFake.seedItem({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", instrumentId: 2 });
     for (const itemId of [FOREIGN_UUID, foreign.item_id]) {
       const { status, body } = await callDynamic(
         deleteItemRoute,
@@ -593,7 +609,7 @@ describe("DELETE /api/live-trade/items/[itemId]", () => {
   });
 
   it("rejects a stale delete with 409", async () => {
-    const item = mockFake.seedItem({ owner: "owner-a", instrumentId: 1, version: 3 });
+    const item = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1, version: 3 });
     const { status, body } = await callDynamic(
       deleteItemRoute,
       request(`/api/live-trade/items/${item.item_id}?version=1`, {
@@ -623,8 +639,8 @@ describe("DELETE /api/live-trade/items/[itemId]", () => {
 
 describe("PATCH /api/live-trade/items/reorder", () => {
   it("applies the submitted order and increments versions", async () => {
-    const first = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
-    const second = mockFake.seedItem({ owner: "owner-a", instrumentId: 2 });
+    const first = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
+    const second = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 2 });
 
     const { status, body } = await call(
       reorderItemsRoute,
@@ -643,8 +659,8 @@ describe("PATCH /api/live-trade/items/reorder", () => {
   });
 
   it("rejects duplicate and malformed IDs", async () => {
-    const first = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
-    mockFake.seedItem({ owner: "owner-a", instrumentId: 2 });
+    const first = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
+    mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 2 });
 
     const duplicate = await call(
       reorderItemsRoute,
@@ -667,8 +683,8 @@ describe("PATCH /api/live-trade/items/reorder", () => {
   });
 
   it("rejects a set that does not match the owner's items", async () => {
-    const first = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
-    mockFake.seedItem({ owner: "owner-a", instrumentId: 2 });
+    const first = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
+    mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 2 });
 
     const missing = await call(
       reorderItemsRoute,
@@ -701,7 +717,7 @@ describe("PATCH /api/live-trade/items/reorder", () => {
     expect(none.status).toBe(200);
     expect(none.body.data.items).toEqual([]);
 
-    mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
+    mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
     const withItems = await call(
       reorderItemsRoute,
       request("/api/live-trade/items/reorder", {
@@ -714,8 +730,8 @@ describe("PATCH /api/live-trade/items/reorder", () => {
   });
 
   it("rejects a foreign owner's IDs and leaves rows unchanged", async () => {
-    const mine = mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
-    const theirs = mockFake.seedItem({ owner: "owner-b", instrumentId: 2 });
+    const mine = mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
+    const theirs = mockFake.seedItem({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", instrumentId: 2 });
 
     const { status } = await call(
       reorderItemsRoute,
@@ -734,9 +750,9 @@ describe("PATCH /api/live-trade/items/reorder", () => {
 
 describe("groups", () => {
   it("lists groups in saved order", async () => {
-    mockFake.seedGroup({ owner: "owner-a", name: "Second", sortOrder: 1 });
-    mockFake.seedGroup({ owner: "owner-a", name: "First", sortOrder: 0 });
-    mockFake.seedGroup({ owner: "owner-b", name: "Theirs", sortOrder: 0 });
+    mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Second", sortOrder: 1 });
+    mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "First", sortOrder: 0 });
+    mockFake.seedGroup({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", name: "Theirs", sortOrder: 0 });
 
     const { status, body } = await call(
       listGroupsRoute,
@@ -750,7 +766,7 @@ describe("groups", () => {
   });
 
   it("creates a group with 201 and server-managed order", async () => {
-    mockFake.seedGroup({ owner: "owner-a", name: "Existing" });
+    mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Existing" });
     const { status, body } = await call(
       createGroupRoute,
       request("/api/live-trade/groups", {
@@ -767,7 +783,7 @@ describe("groups", () => {
   });
 
   it("rejects duplicate names case-insensitively", async () => {
-    mockFake.seedGroup({ owner: "owner-a", name: "Swing" });
+    mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Swing" });
     const { status, body } = await call(
       createGroupRoute,
       request("/api/live-trade/groups", {
@@ -781,7 +797,7 @@ describe("groups", () => {
 
   it("enforces the 20-group limit", async () => {
     for (let index = 0; index < 20; index += 1) {
-      mockFake.seedGroup({ owner: "owner-a", name: `Group ${index}` });
+      mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: `Group ${index}` });
     }
     const { status, body } = await call(
       createGroupRoute,
@@ -822,7 +838,7 @@ describe("groups", () => {
   });
 
   it("renames a group and increments its version", async () => {
-    const group = mockFake.seedGroup({ owner: "owner-a", name: "Old" });
+    const group = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Old" });
     const { status, body } = await callDynamic(
       patchGroupRoute,
       request(`/api/live-trade/groups/${group.group_id}`, {
@@ -837,8 +853,8 @@ describe("groups", () => {
   });
 
   it("rejects a stale rename and a duplicate rename", async () => {
-    const group = mockFake.seedGroup({ owner: "owner-a", name: "Old" });
-    mockFake.seedGroup({ owner: "owner-a", name: "Taken" });
+    const group = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Old" });
+    mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Taken" });
 
     const stale = await callDynamic(
       patchGroupRoute,
@@ -864,7 +880,7 @@ describe("groups", () => {
   });
 
   it("returns 404 for foreign and missing group ids", async () => {
-    const foreign = mockFake.seedGroup({ owner: "owner-b", name: "Theirs" });
+    const foreign = mockFake.seedGroup({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", name: "Theirs" });
     for (const groupId of [FOREIGN_UUID, foreign.group_id]) {
       const { status, body } = await callDynamic(
         patchGroupRoute,
@@ -894,15 +910,15 @@ describe("groups", () => {
   });
 
   it("deletes a group, ungroups its items and increments their versions", async () => {
-    const group = mockFake.seedGroup({ owner: "owner-a", name: "Momentum" });
-    const other = mockFake.seedGroup({ owner: "owner-a", name: "Other" });
+    const group = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Momentum" });
+    const other = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Other" });
     const inGroup = mockFake.seedItem({
-      owner: "owner-a",
+      owner: "0f8fad5b-d9cb-469f-a165-70867728950e",
       instrumentId: 1,
       groupId: group.group_id,
     });
     const elsewhere = mockFake.seedItem({
-      owner: "owner-a",
+      owner: "0f8fad5b-d9cb-469f-a165-70867728950e",
       instrumentId: 2,
       groupId: other.group_id,
     });
@@ -929,7 +945,7 @@ describe("groups", () => {
   });
 
   it("requires a valid version to delete", async () => {
-    const group = mockFake.seedGroup({ owner: "owner-a", name: "Momentum" });
+    const group = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Momentum" });
     for (const search of ["", "?version=", "?version=abc", "?version=0"]) {
       const { status, body } = await callDynamic(
         deleteGroupRoute,
@@ -944,7 +960,7 @@ describe("groups", () => {
   });
 
   it("rejects a stale delete and keeps the group", async () => {
-    const group = mockFake.seedGroup({ owner: "owner-a", name: "Momentum", version: 2 });
+    const group = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Momentum", version: 2 });
     const { status, body } = await callDynamic(
       deleteGroupRoute,
       request(`/api/live-trade/groups/${group.group_id}?version=1`, {
@@ -958,7 +974,7 @@ describe("groups", () => {
   });
 
   it("returns 404 for a foreign or missing group delete", async () => {
-    const foreign = mockFake.seedGroup({ owner: "owner-b", name: "Theirs" });
+    const foreign = mockFake.seedGroup({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", name: "Theirs" });
     for (const groupId of [FOREIGN_UUID, foreign.group_id]) {
       const { status, body } = await callDynamic(
         deleteGroupRoute,
@@ -985,8 +1001,8 @@ describe("groups", () => {
   });
 
   it("reorders groups and increments versions", async () => {
-    const first = mockFake.seedGroup({ owner: "owner-a", name: "First", sortOrder: 0 });
-    const second = mockFake.seedGroup({ owner: "owner-a", name: "Second", sortOrder: 1 });
+    const first = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "First", sortOrder: 0 });
+    const second = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Second", sortOrder: 1 });
 
     const { status, body } = await call(
       reorderGroupsRoute,
@@ -1005,8 +1021,8 @@ describe("groups", () => {
   });
 
   it("rejects duplicate, malformed and incomplete group reorders", async () => {
-    const first = mockFake.seedGroup({ owner: "owner-a", name: "First" });
-    mockFake.seedGroup({ owner: "owner-a", name: "Second" });
+    const first = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "First" });
+    mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "Second" });
 
     const duplicate = await call(
       reorderGroupsRoute,
@@ -1047,7 +1063,7 @@ describe("groups", () => {
     );
     expect(none.status).toBe(200);
 
-    mockFake.seedGroup({ owner: "owner-a", name: "First" });
+    mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "First" });
     const withGroups = await call(
       reorderGroupsRoute,
       request("/api/live-trade/groups/reorder", {
@@ -1059,7 +1075,7 @@ describe("groups", () => {
   });
 
   it("requires an Origin header for every group mutation", async () => {
-    const group = mockFake.seedGroup({ owner: "owner-a", name: "First" });
+    const group = mockFake.seedGroup({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", name: "First" });
     const create = await call(
       createGroupRoute,
       request("/api/live-trade/groups", {

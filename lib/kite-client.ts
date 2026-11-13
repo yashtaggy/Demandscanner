@@ -23,9 +23,13 @@ import type { Instrument, QuoteData, StockRow } from "./types";
 /**
  * Create an authenticated KiteConnect instance.
  * The `Connect` type is the instance type returned by `new KiteConnect(...)`.
+ *
+ * `apiKey` lets a caller act under a specific Kite application (for example the
+ * operator-owned system market-data app). It is an application identifier, not
+ * a secret. When omitted, the process-wide KITE_API_KEY is used.
  */
-export function createKiteClient(accessToken: string): Connect {
-  const kc = new KiteConnect({ api_key: getKiteApiKey() });
+export function createKiteClient(accessToken: string, apiKey?: string): Connect {
+  const kc = new KiteConnect({ api_key: apiKey ?? getKiteApiKey() });
   kc.setAccessToken(accessToken);
   return kc;
 }
@@ -82,7 +86,8 @@ const INSTRUMENT_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
  */
 export async function getNSEInstruments(
   accessToken: string,
-  forceRefresh = false
+  forceRefresh = false,
+  apiKey?: string
 ): Promise<Map<string, Instrument>> {
   const now = new Date();
   if (
@@ -93,7 +98,7 @@ export async function getNSEInstruments(
     return instrumentCache.instruments;
   }
 
-  const kc = createKiteClient(accessToken);
+  const kc = createKiteClient(accessToken, apiKey);
   // getInstruments takes a single exchange string (Exchanges type), not an array
   const rawInstruments: KiteInstrument[] = await kc.getInstruments("NSE");
 
@@ -141,17 +146,19 @@ export function getInstrumentCacheAge(): Date | null {
  *
  * @param accessToken  Valid Kite access token
  * @param symbols      Array of "EXCHANGE:TRADINGSYMBOL" strings (e.g. ["NSE:INFY"])
+ * @param apiKey       Optional Kite application key (defaults to KITE_API_KEY)
  */
 export async function getQuotes(
   accessToken: string,
-  symbols: string[]
+  symbols: string[],
+  apiKey?: string
 ): Promise<Map<string, QuoteData>> {
   if (symbols.length === 0) return new Map();
   if (symbols.length > 500) {
     throw new Error("Kite /quote endpoint supports a maximum of 500 instruments per request.");
   }
 
-  const kc = createKiteClient(accessToken);
+  const kc = createKiteClient(accessToken, apiKey);
   // getQuote returns Promise<unknown> in the SDK types — we assert the shape
   const raw = (await kc.getQuote(symbols)) as Record<string, RawKiteQuote>;
 

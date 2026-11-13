@@ -1,57 +1,73 @@
 /**
  * Live Trade owner resolution tests.
  *
- * The session module is mocked; this verifies the resolver's contract, not the
- * session store (covered by __tests__/kite-session.test.ts).
+ * The centralized entitlement gate is mocked; this verifies that ownership
+ * comes only from the internal DemandScan user, never from Kite or the request
+ * body, and that an unentitled account is refused before any repository call.
  */
 
-import type { KiteSession } from "@/lib/types";
-
-jest.mock("@/lib/kite-session", () => ({
-  getSessionFromRequest: jest.fn(),
+jest.mock("@/lib/subscriptions/entitlements", () => ({
+  requireActiveSubscription: jest.fn(),
 }));
 
-import { getSessionFromRequest } from "@/lib/kite-session";
+import { requireActiveSubscription } from "@/lib/subscriptions/entitlements";
+import { AppAuthError } from "@/lib/auth/types";
 import {
   resolveLiveTradeOwner,
   resolveLiveTradeOwnerId,
 } from "@/lib/live-trade/ownership";
 import { LiveTradeError } from "@/lib/live-trade/errors";
+import type { SubscriptionState } from "@/lib/subscriptions/types";
 
-const mockGetSession = getSessionFromRequest as jest.MockedFunction<
-  typeof getSessionFromRequest
+const OWNER_ID = "0f8fad5b-d9cb-469f-a165-70867728950e";
+
+const mockRequireActiveSubscription = requireActiveSubscription as jest.MockedFunction<
+  typeof requireActiveSubscription
 >;
 
-function makeSession(overrides: Partial<KiteSession> = {}): KiteSession {
+function appUser(userId: string = OWNER_ID) {
   return {
-    accessToken: "mock_access_token",
-    userId: "ZP0001",
-    userName: "Test User",
-    email: "test@example.com",
-    loginTime: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    ...overrides,
+    userId,
+    email: "customer@example.test",
+    displayName: "Customer",
+    status: "ACTIVE" as const,
+    role: "CUSTOMER" as const,
+  };
+}
+
+function subscriptionState(): SubscriptionState {
+  return {
+    entitled: true,
+    today: "2026-11-13",
+    current: null,
+    history: [],
   };
 }
 
 beforeEach(() => {
-  mockGetSession.mockReset();
+  mockRequireActiveSubscription.mockReset();
 });
 
 describe("resolveLiveTradeOwner", () => {
-  it("returns the session user id as the owner", async () => {
-    const session = makeSession();
-    mockGetSession.mockResolvedValue(session);
+  it("returns the internal app user id as the owner", async () => {
+    mockRequireActiveSubscription.mockResolvedValue({
+      user: appUser(),
+      subscription: subscriptionState(),
+    });
 
-    const context = await resolveLiveTradeOwner("ds_sid=abc");
+    const context = await resolveLiveTradeOwner("ds_app_session=abc");
 
-    expect(mockGetSession).toHaveBeenCalledWith("ds_sid=abc");
-    expect(context.ownerId).toBe("ZP0001");
-    expect(context.session).toBe(session);
+    expect(mockRequireActiveSubscription).toHaveBeenCalledWith(
+      "ds_app_session=abc"
+    );
+    expect(context.ownerId).toBe(OWNER_ID);
+    expect(context).not.toHaveProperty("session");
   });
 
-  it("throws UNAUTHENTICATED when there is no session", async () => {
-    mockGetSession.mockResolvedValue(null);
+  it("throws UNAUTHENTICATED when no app session is present", async () => {
+    mockRequireActiveSubscription.mockRejectedValue(
+      new AppAuthError("UNAUTHENTICATED")
+    );
 
     await expect(resolveLiveTradeOwner(null)).rejects.toMatchObject({
       code: "UNAUTHENTICATED",
@@ -59,40 +75,78 @@ describe("resolveLiveTradeOwner", () => {
     });
   });
 
-  it("throws UNAUTHENTICATED when the session has a blank user id", async () => {
-    mockGetSession.mockResolvedValue(makeSession({ userId: "   " }));
-
-    await expect(resolveLiveTradeOwner("ds_sid=abc")).rejects.toBeInstanceOf(
-      LiveTradeError
+  it("throws UNAUTHENTICATED for an invalid or unknown identity", async () => {
+    mockRequireActiveSubscription.mockRejectedValue(
+      new AppAuthError("NO_IDENTITY")
     );
+
+    await expect(
+      resolveLiveTradeOwner("ds_app_session=abc")
+    ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 
-  it("throws UNAUTHENTICATED when the user id is missing", async () => {
-    mockGetSession.mockResolvedValue(
-      makeSession({ userId: undefined as unknown as string })
+  it("throws FORBIDDEN for a suspended account", async () => {
+    mockRequireActiveSubscription.mockRejectedValue(
+      new AppAuthError("SUSPENDED")
     );
 
-    await expect(resolveLiveTradeOwner("ds_sid=abc")).rejects.toMatchObject({
-      code: "UNAUTHENTICATED",
+    await expect(
+      resolveLiveTradeOwner("ds_app_session=abc")
+    ).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+  });
+
+  it("throws FORBIDDEN for a disabled account", async () => {
+    mockRequireActiveSubscription.mockRejectedValue(
+      new AppAuthError("DISABLED")
+    );
+
+    await expect(
+      resolveLiveTradeOwner("ds_app_session=abc")
+    ).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+  });
+
+  it("throws SUBSCRIPTION_REQUIRED when the account has no current plan", async () => {
+    mockRequireActiveSubscription.mockRejectedValue(
+      new AppAuthError("SUBSCRIPTION_REQUIRED")
+    );
+
+    await expect(
+      resolveLiveTradeOwner("ds_app_session=abc")
+    ).rejects.toMatchObject({ code: "SUBSCRIPTION_REQUIRED", status: 403 });
+  });
+
+  it("refuses a non-UUID internal user id instead of using it", async () => {
+    mockRequireActiveSubscription.mockResolvedValue({
+      user: appUser("ZP0001"),
+      subscription: subscriptionState(),
     });
+
+    await expect(
+      resolveLiveTradeOwner("ds_app_session=abc")
+    ).rejects.toMatchObject({ code: "INTERNAL", status: 500 });
   });
 
-  it("propagates session-store failures instead of misreporting a 401", async () => {
-    const dbError = new Error("database unavailable");
-    mockGetSession.mockRejectedValue(dbError);
+  it("does not misreport an unexpected failure as a 401", async () => {
+    mockRequireActiveSubscription.mockRejectedValue(
+      new Error("database unavailable")
+    );
 
-    await expect(resolveLiveTradeOwner("ds_sid=abc")).rejects.toBe(dbError);
+    await expect(
+      resolveLiveTradeOwner("ds_app_session=abc")
+    ).rejects.toMatchObject({ code: "INTERNAL", status: 500 });
   });
 
   it("does not leak the owner id in the public error body", async () => {
-    mockGetSession.mockResolvedValue(null);
+    mockRequireActiveSubscription.mockRejectedValue(
+      new AppAuthError("UNAUTHENTICATED")
+    );
     try {
       await resolveLiveTradeOwner(null);
       throw new Error("expected rejection");
     } catch (error) {
       const body = (error as LiveTradeError).toBody();
       expect(body).toEqual({
-        error: "Authentication required.",
+        error: "Sign in to DemandScan to use Live Trade.",
         code: "UNAUTHENTICATED",
       });
     }
@@ -101,7 +155,12 @@ describe("resolveLiveTradeOwner", () => {
 
 describe("resolveLiveTradeOwnerId", () => {
   it("returns only the owner id", async () => {
-    mockGetSession.mockResolvedValue(makeSession({ userId: "AB1234" }));
-    await expect(resolveLiveTradeOwnerId("ds_sid=abc")).resolves.toBe("AB1234");
+    mockRequireActiveSubscription.mockResolvedValue({
+      user: appUser(),
+      subscription: subscriptionState(),
+    });
+    await expect(resolveLiveTradeOwnerId("ds_app_session=abc")).resolves.toBe(
+      OWNER_ID
+    );
   });
 });

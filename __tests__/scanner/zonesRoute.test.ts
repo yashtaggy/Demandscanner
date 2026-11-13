@@ -15,8 +15,8 @@ jest.mock('next/server', () => ({
   },
 }));
 
-jest.mock('@/lib/kite-session', () => ({
-  requireSession: jest.fn(async () => ({})),
+jest.mock('@/lib/subscriptions/entitlements', () => ({
+  requireActiveSubscription: jest.fn(async () => ({})),
 }));
 
 const mockQuery = jest.fn();
@@ -26,9 +26,10 @@ jest.mock('@/lib/db', () => ({
 }));
 
 import { GET } from '@/app/api/scanner/zones/route';
-import { requireSession } from '@/lib/kite-session';
+import { requireActiveSubscription } from '@/lib/subscriptions/entitlements';
+import { AppAuthError } from '@/lib/auth/types';
 
-const requireSessionMock = requireSession as jest.Mock;
+const requireAppUserMock = requireActiveSubscription as jest.Mock;
 
 function request(qs: string) {
   return {
@@ -52,16 +53,16 @@ function secondSql() {
 beforeEach(() => {
   mockQuery.mockReset();
   mockQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([{ n: 0 }]);
-  requireSessionMock.mockReset();
-  requireSessionMock.mockResolvedValue({});
+  requireAppUserMock.mockReset();
+  requireAppUserMock.mockResolvedValue({});
 });
 
 describe('GET /api/scanner/zones', () => {
   test('returns 401 without a session and never queries', async () => {
-    requireSessionMock.mockRejectedValue(new Error('no session'));
+    requireAppUserMock.mockRejectedValue(new AppAuthError('UNAUTHENTICATED'));
     const { status, body } = await call('');
     expect(status).toBe(401);
-    expect(body).toEqual({ error: 'UNAUTHENTICATED' });
+    expect(body.code).toBe('UNAUTHENTICATED');
     expect(mockQuery).not.toHaveBeenCalled();
   });
 

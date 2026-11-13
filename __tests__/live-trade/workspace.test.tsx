@@ -192,7 +192,7 @@ beforeEach(() => {
 
 describe("LiveTradeWorkspace", () => {
   test("renders the empty workspace with instrument search", () => {
-    render(<LiveTradeWorkspace authMarket={null} />);
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
 
     expect(screen.getByText("Your board is empty")).toBeTruthy();
     expect(screen.getByText("Add instruments")).toBeTruthy();
@@ -226,7 +226,7 @@ describe("LiveTradeWorkspace", () => {
       makeItem({ itemId: "new", instrumentId: 408065, symbol: "INFY" })
     );
 
-    render(<LiveTradeWorkspace authMarket={null} />);
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
     fireEvent.change(screen.getByLabelText("Search NSE instruments to add"), {
       target: { value: "infy" },
     });
@@ -276,7 +276,7 @@ describe("LiveTradeWorkspace", () => {
       makeItem({ itemId: "i2", instrumentId: 408065, symbol: "INFY" })
     );
 
-    render(<LiveTradeWorkspace authMarket={null} />);
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
     fireEvent.change(screen.getByLabelText("Search NSE instruments to add"), {
       target: { value: "infy" },
     });
@@ -355,7 +355,7 @@ describe("LiveTradeWorkspace", () => {
       })
     );
 
-    render(<LiveTradeWorkspace authMarket={null} />);
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
 
     // Rows are keyed and addressable by item id, never by instrument or symbol.
     expect(screen.getByTestId("watchlist-item-gold-1")).toBeTruthy();
@@ -405,7 +405,7 @@ describe("LiveTradeWorkspace", () => {
       )
     );
 
-    render(<LiveTradeWorkspace authMarket={null} />);
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
     expect(screen.getByTestId("watchlist-item-i1")).toBeTruthy();
     expect(screen.getByTestId("watchlist-item-i2")).toBeTruthy();
 
@@ -447,7 +447,7 @@ describe("LiveTradeWorkspace", () => {
       makeItem({ itemId: "c", instrumentId: 3, symbol: "CCC", sortOrder: 2 }),
     ]);
 
-    render(<LiveTradeWorkspace authMarket={null} />);
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Move BBB up" }));
       for (let i = 0; i < 8; i += 1) await Promise.resolve();
@@ -492,33 +492,49 @@ describe("LiveTradeWorkspace", () => {
       })
     );
 
-    render(<LiveTradeWorkspace authMarket={null} />);
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
 
     expect(screen.getByTestId("watchlist-item-i1")).toBeTruthy();
     expect(screen.getByText(/Your board data is unaffected/)).toBeTruthy();
     expect(screen.getByText(/Retained snapshot/)).toBeTruthy();
   });
 
-  test("shows a reconnect banner for an expired session", () => {
+  test("shows a sign-in banner for an expired app session", () => {
     mockBoardHook.mockReturnValue(
       boardState(
         makeBoard([
           makeItem({ itemId: "i1", instrumentId: 1, symbol: "INFY" }),
         ]),
-        Object.assign(new Error("Your Kite session has expired."), {
+        Object.assign(new Error("Sign in required."), {
           status: 401,
-          code: "TOKEN_EXPIRED",
+          code: "UNAUTHENTICATED",
         })
       )
     );
 
-    render(<LiveTradeWorkspace authMarket={null} />);
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
 
     expect(
-      screen.getByText("Your Kite session needs attention")
+      screen.getByText("Your DemandScan session needs attention")
     ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+    expect(screen.getByTestId("watchlist-item-i1")).toBeTruthy();
+  });
+
+  test("shows a broker banner when Kite is not connected", () => {
+    mockBoardHook.mockReturnValue(
+      boardState(
+        makeBoard([
+          makeItem({ itemId: "i1", instrumentId: 1, symbol: "INFY" }),
+        ])
+      )
+    );
+
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected={false} />);
+
+    expect(screen.getByText("Connect Kite to load live quotes")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Reconnect Zerodha" })
+      screen.getByRole("button", { name: "Connect Kite" })
     ).toBeTruthy();
     expect(screen.getByTestId("watchlist-item-i1")).toBeTruthy();
   });
@@ -532,7 +548,7 @@ describe("LiveTradeWorkspace", () => {
       )
     );
 
-    render(<LiveTradeWorkspace authMarket={null} />);
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
     fireEvent.click(
       screen.getByRole("button", { name: "Remove INFY from watchlist" })
     );
@@ -570,7 +586,7 @@ describe("LiveTradeWorkspace", () => {
       reload: mockReloadZones,
     });
 
-    render(<LiveTradeWorkspace authMarket={null} />);
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
 
     expect(
       screen.getByText(/Live zone summaries could not be loaded/)
@@ -597,7 +613,7 @@ describe("LiveTradeWorkspace", () => {
       reload: mockReloadZones,
     });
 
-    render(<LiveTradeWorkspace authMarket={null} />);
+    render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
 
     const retry = screen.getByRole("button", { name: "Retry zones" });
     expect((retry as HTMLButtonElement).disabled).toBe(true);

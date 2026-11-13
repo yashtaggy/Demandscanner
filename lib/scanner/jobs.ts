@@ -7,7 +7,7 @@
 
 import { getDb } from '../db';
 import { randomUUID } from 'crypto';
-import type { KiteSession } from '../types';
+import type { MarketDataInput } from '@/lib/market-data/context';
 import { ingestAllInstruments } from './ingest_all';
 
 export type ScanJobStatus = 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
@@ -22,6 +22,9 @@ export type ScanStage =
   | 'LIFECYCLE';
 
 export interface CreateScanJobOptions {
+  /** Internal app_users.user_id. Primary owner from Phase 2 onward. */
+  initiatorUserId?: string;
+  /** Legacy Kite session hash; kept only to adopt pre-Phase-2 jobs. */
   sessionIdHash?: string;
   fromDate?: Date;
   toDate?: Date;
@@ -38,6 +41,7 @@ export interface ScanJobRow {
   progress_percent: number;
   error_message: string | null;
   config_id: string;
+  initiator_user_id: string | null;
   session_id_hash: string | null;
   from_date: Date | string | null;
   to_date: Date | string | null;
@@ -91,6 +95,7 @@ export function mapScanJobRow(row: any): ScanJobRow {
     progress_percent: Number(row.progress_percent ?? 0),
     error_message: (row.error_message as string) ?? null,
     config_id: row.config_id as string,
+    initiator_user_id: (row.initiator_user_id as string) ?? null,
     session_id_hash: (row.session_id_hash as string) ?? null,
     from_date: row.from_date ?? null,
     to_date: row.to_date ?? null,
@@ -119,6 +124,7 @@ export async function createScanJob(
   const sql = getDb();
   const jobId = randomUUID();
   const hasCheckpointFields =
+    extras.initiatorUserId != null ||
     extras.sessionIdHash != null ||
     extras.fromDate != null ||
     extras.toDate != null ||
@@ -144,18 +150,19 @@ export async function createScanJob(
   const toDate = extras.toDate ?? null;
   const concurrency = extras.concurrency ?? 5;
   const sessionIdHash = extras.sessionIdHash ?? null;
+  const initiatorUserId = extras.initiatorUserId ?? null;
   const total = extras.instrumentIds?.length ?? 0;
 
   await sql`
     INSERT INTO scan_jobs (
       job_id, started_at, status, progress_percent, config_id,
-      session_id_hash, from_date, to_date, concurrency,
+      initiator_user_id, session_id_hash, from_date, to_date, concurrency,
       current_stage, cursor_instrument_id, instrument_ids, requested_symbols,
       retry_count, max_retries, total_instruments, processed_instruments
     )
     VALUES (
       ${jobId}, NOW(), ${'PENDING'}, 0, ${configId},
-      ${sessionIdHash}, ${fromDate}, ${toDate}, ${concurrency},
+      ${initiatorUserId}, ${sessionIdHash}, ${fromDate}, ${toDate}, ${concurrency},
       ${'SYNC_INSTRUMENTS'}, 0, ${instrumentJson}::jsonb, ${symbolsJson}::jsonb,
       0, 5, ${total}, 0
     )
@@ -265,15 +272,47 @@ export async function getScanBatchStats(jobId: string): Promise<ScanBatchStats> 
   };
 }
 
+export interface ScanJobOwner {
+  userId?: string | null;
+  sessionIdHash?: string | null;
+}
+
+function normalizeOwner(owner?: string | ScanJobOwner): ScanJobOwner {
+  if (typeof owner === "string") return { sessionIdHash: owner };
+  return owner ?? {};
+}
+
 export async function findActiveScanJob(
-  sessionIdHash?: string
+  owner?: string | ScanJobOwner
 ): Promise<ScanJobRow | null> {
   const sql = getDb();
+  const { userId, sessionIdHash } = normalizeOwner(owner);
   let rows;
-  if (sessionIdHash) {
+
+  if (userId && sessionIdHash) {
     rows = await sql`
       SELECT * FROM scan_jobs
       WHERE status IN ('PENDING', 'RUNNING')
+        AND (
+          initiator_user_id = ${userId}
+          OR (initiator_user_id IS NULL AND session_id_hash = ${sessionIdHash})
+        )
+      ORDER BY started_at DESC
+      LIMIT 1
+    `;
+  } else if (userId) {
+    rows = await sql`
+      SELECT * FROM scan_jobs
+      WHERE status IN ('PENDING', 'RUNNING')
+        AND initiator_user_id = ${userId}
+      ORDER BY started_at DESC
+      LIMIT 1
+    `;
+  } else if (sessionIdHash) {
+    rows = await sql`
+      SELECT * FROM scan_jobs
+      WHERE status IN ('PENDING', 'RUNNING')
+        AND initiator_user_id IS NULL
         AND session_id_hash = ${sessionIdHash}
       ORDER BY started_at DESC
       LIMIT 1
@@ -302,39 +341,75 @@ export const STALE_JOB_AFTER_MS = 24 * 60 * 60 * 1000;
  * never modified.
  */
 export async function retireStaleScanJobs(
-  sessionIdHash?: string
+  owner?: string | ScanJobOwner
 ): Promise<number> {
   const sql = getDb();
+  const { userId, sessionIdHash } = normalizeOwner(owner);
   const cutoff = new Date(Date.now() - STALE_JOB_AFTER_MS);
   const message =
     'Abandoned: no scan progress for over 24 hours. Start a new scan.';
 
-  const rows = sessionIdHash
-    ? await sql`
-        UPDATE scan_jobs
-        SET status          = 'FAILED',
-            completed_at    = NOW(),
-            error_message   = ${message},
-            lease_owner     = NULL,
-            lease_expires_at = NULL
-        WHERE status IN ('PENDING', 'RUNNING')
-          AND session_id_hash = ${sessionIdHash}
-          AND started_at < ${cutoff}
-          AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
-        RETURNING job_id
-      `
-    : await sql`
-        UPDATE scan_jobs
-        SET status          = 'FAILED',
-            completed_at    = NOW(),
-            error_message   = ${message},
-            lease_owner     = NULL,
-            lease_expires_at = NULL
-        WHERE status IN ('PENDING', 'RUNNING')
-          AND started_at < ${cutoff}
-          AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
-        RETURNING job_id
-      `;
+  let rows;
+  if (userId && sessionIdHash) {
+    rows = await sql`
+      UPDATE scan_jobs
+      SET status          = 'FAILED',
+          completed_at    = NOW(),
+          error_message   = ${message},
+          lease_owner     = NULL,
+          lease_expires_at = NULL
+      WHERE status IN ('PENDING', 'RUNNING')
+        AND (
+          initiator_user_id = ${userId}
+          OR (initiator_user_id IS NULL AND session_id_hash = ${sessionIdHash})
+        )
+        AND started_at < ${cutoff}
+        AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+      RETURNING job_id
+    `;
+  } else if (userId) {
+    rows = await sql`
+      UPDATE scan_jobs
+      SET status          = 'FAILED',
+          completed_at    = NOW(),
+          error_message   = ${message},
+          lease_owner     = NULL,
+          lease_expires_at = NULL
+      WHERE status IN ('PENDING', 'RUNNING')
+        AND initiator_user_id = ${userId}
+        AND started_at < ${cutoff}
+        AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+      RETURNING job_id
+    `;
+  } else if (sessionIdHash) {
+    rows = await sql`
+      UPDATE scan_jobs
+      SET status          = 'FAILED',
+          completed_at    = NOW(),
+          error_message   = ${message},
+          lease_owner     = NULL,
+          lease_expires_at = NULL
+      WHERE status IN ('PENDING', 'RUNNING')
+        AND initiator_user_id IS NULL
+        AND session_id_hash = ${sessionIdHash}
+        AND started_at < ${cutoff}
+        AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+      RETURNING job_id
+    `;
+  } else {
+    rows = await sql`
+      UPDATE scan_jobs
+      SET status          = 'FAILED',
+          completed_at    = NOW(),
+          error_message   = ${message},
+          lease_owner     = NULL,
+          lease_expires_at = NULL
+      WHERE status IN ('PENDING', 'RUNNING')
+        AND started_at < ${cutoff}
+        AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+      RETURNING job_id
+    `;
+  }
 
   if (rows.length > 0) {
     console.warn(`[scanner] retired ${rows.length} abandoned scan job(s)`);
@@ -349,6 +424,7 @@ export async function retireStaleScanJobs(
  */
 export async function claimScanJob(opts: {
   jobId?: string;
+  userId?: string | null;
   sessionIdHash?: string | null;
   leaseOwner: string;
   leaseMs?: number;
@@ -357,10 +433,28 @@ export async function claimScanJob(opts: {
   const leaseMs = opts.leaseMs ?? 90_000;
   const leaseExpires = new Date(Date.now() + leaseMs);
   const leaseOwner = opts.leaseOwner;
+  const userId = opts.userId ?? null;
+  const sessionIdHash = opts.sessionIdHash ?? null;
 
   let rows;
   if (opts.jobId) {
-    if (opts.sessionIdHash) {
+    if (userId && sessionIdHash) {
+      rows = await sql`
+        UPDATE scan_jobs SET
+          status = 'RUNNING',
+          lease_owner = ${leaseOwner},
+          lease_expires_at = ${leaseExpires},
+          initiator_user_id = COALESCE(initiator_user_id, ${userId})
+        WHERE job_id = ${opts.jobId}
+          AND status IN ('PENDING', 'RUNNING')
+          AND (
+            initiator_user_id = ${userId}
+            OR (initiator_user_id IS NULL AND session_id_hash = ${sessionIdHash})
+          )
+          AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+        RETURNING *
+      `;
+    } else if (userId) {
       rows = await sql`
         UPDATE scan_jobs SET
           status = 'RUNNING',
@@ -368,7 +462,20 @@ export async function claimScanJob(opts: {
           lease_expires_at = ${leaseExpires}
         WHERE job_id = ${opts.jobId}
           AND status IN ('PENDING', 'RUNNING')
-          AND (session_id_hash = ${opts.sessionIdHash} OR session_id_hash IS NULL)
+          AND initiator_user_id = ${userId}
+          AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+        RETURNING *
+      `;
+    } else if (sessionIdHash) {
+      rows = await sql`
+        UPDATE scan_jobs SET
+          status = 'RUNNING',
+          lease_owner = ${leaseOwner},
+          lease_expires_at = ${leaseExpires}
+        WHERE job_id = ${opts.jobId}
+          AND status IN ('PENDING', 'RUNNING')
+          AND initiator_user_id IS NULL
+          AND session_id_hash = ${sessionIdHash}
           AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
         RETURNING *
       `;
@@ -384,7 +491,29 @@ export async function claimScanJob(opts: {
         RETURNING *
       `;
     }
-  } else if (opts.sessionIdHash) {
+  } else if (userId && sessionIdHash) {
+    rows = await sql`
+      UPDATE scan_jobs AS s SET
+        status = 'RUNNING',
+        lease_owner = ${leaseOwner},
+        lease_expires_at = ${leaseExpires},
+        initiator_user_id = COALESCE(s.initiator_user_id, ${userId})
+      FROM (
+        SELECT job_id FROM scan_jobs
+        WHERE status IN ('PENDING', 'RUNNING')
+          AND (
+            initiator_user_id = ${userId}
+            OR (initiator_user_id IS NULL AND session_id_hash = ${sessionIdHash})
+          )
+          AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+        ORDER BY started_at ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      ) AS next_job
+      WHERE s.job_id = next_job.job_id
+      RETURNING s.*
+    `;
+  } else if (userId) {
     rows = await sql`
       UPDATE scan_jobs AS s SET
         status = 'RUNNING',
@@ -393,7 +522,26 @@ export async function claimScanJob(opts: {
       FROM (
         SELECT job_id FROM scan_jobs
         WHERE status IN ('PENDING', 'RUNNING')
-          AND session_id_hash = ${opts.sessionIdHash}
+          AND initiator_user_id = ${userId}
+          AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+        ORDER BY started_at ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      ) AS next_job
+      WHERE s.job_id = next_job.job_id
+      RETURNING s.*
+    `;
+  } else if (sessionIdHash) {
+    rows = await sql`
+      UPDATE scan_jobs AS s SET
+        status = 'RUNNING',
+        lease_owner = ${leaseOwner},
+        lease_expires_at = ${leaseExpires}
+      FROM (
+        SELECT job_id FROM scan_jobs
+        WHERE status IN ('PENDING', 'RUNNING')
+          AND initiator_user_id IS NULL
+          AND session_id_hash = ${sessionIdHash}
           AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
         ORDER BY started_at ASC
         LIMIT 1
@@ -512,7 +660,7 @@ export async function persistScanJobCheckpoint(opts: {
  * For the full scan pipeline, use the batch runner instead.
  */
 export async function runIngestionJob(
-  session: KiteSession,
+  input: MarketDataInput,
   jobId: string,
   fromDate: Date,
   toDate: Date,
@@ -520,7 +668,7 @@ export async function runIngestionJob(
 ): Promise<void> {
   await updateScanJob(jobId, { status: 'RUNNING', progressPercent: 0 });
   try {
-    await ingestAllInstruments(session, fromDate, toDate, concurrency);
+    await ingestAllInstruments(input, fromDate, toDate, concurrency);
     await updateScanJob(jobId, {
       status: 'SUCCESS',
       progressPercent: 100,

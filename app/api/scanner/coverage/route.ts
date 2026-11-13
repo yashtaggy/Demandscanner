@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { requireSession } from '@/lib/kite-session';
+import { requireActiveSubscription } from '@/lib/subscriptions/entitlements';
+import { authErrorResponse } from '@/lib/auth/http';
 import { getDb } from '@/lib/db';
 import type { Timeframe } from '@/lib/scanner/types';
 
@@ -21,9 +22,9 @@ import type { Timeframe } from '@/lib/scanner/types';
  */
 export async function GET(req: NextRequest) {
   try {
-    await requireSession(req.headers.get('cookie'));
-  } catch {
-    return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
+    await requireActiveSubscription(req.headers.get('cookie'));
+  } catch (err) {
+    return authErrorResponse(err);
   }
 
   const { searchParams } = new URL(req.url);

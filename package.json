@@ -12,6 +12,12 @@
     "test:coverage": "jest --coverage",
     "typecheck": "tsc --noEmit",
     "db:migrate": "node db/migrate.js",
+    "db:phase1:migrate": "node db/migrate-phase1.js",
+    "db:phase1-5:migrate": "node db/migrate-phase1-5.js",
+    "db:phase2:migrate": "node db/migrate-phase2.js",
+    "db:phase3:migrate": "node db/migrate-phase3.js",
+    "db:phase4:migrate": "node db/migrate-phase4.js",
+    "auth:bootstrap-super-admin": "node scripts/bootstrap-super-admin.js",
     "db:target": "node db/target.js",
     "db:verify": "node db/verify-schema.js",
     "db:staging:preflight": "node db/preflight-staging.js",
@@ -22,7 +28,8 @@
     "db:production:live-trade:verify": "node db/verify-live-trade-production.js",
     "dev:staging": "node scripts/run-with-staging-env.js dev",
     "start:staging": "node scripts/run-with-staging-env.js start",
-    "test:staging": "jest --config jest.staging.config.json --runInBand"
+    "test:staging": "jest --config jest.staging.config.json --runInBand",
+    "db:phase5a:init": "node db/migrate-phase5a.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
@@ -33,15 +40,17 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^18.0.8",
+    "firebase": "^13.3.0",
+    "firebase-admin": "^13.10.0",
     "iron-session": "^8.0.4",
     "kiteconnect": "^5.3.0",
     "lucide-react": "^1.57.0",
+    "luxon": "^3.4.0",
     "next": "16.4.0",
     "next-auth": "^5.0.0-beta.32",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "tailwind-merge": "^3.7.0",
-    "luxon": "^3.4.0",
     "uuid": "^14.0.3"
   },
   "devDependencies": {

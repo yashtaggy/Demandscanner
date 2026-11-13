@@ -18,8 +18,12 @@
  */
 
 import { getDb } from '../db';
-import { createKiteClient } from '../kite-client';
-import type { KiteSession } from '../types';
+import {
+  toMarketDataContext,
+  type MarketDataInput,
+} from '@/lib/market-data/context';
+import { resolveProviderInstrumentKey } from '@/lib/market-data/instrument-resolver';
+import { getMarketDataProvider } from '@/lib/market-data/provider';
 import { bulkUpsert } from './bulk';
 import {
   backoffMs,
@@ -164,12 +168,20 @@ async function updateCoverage(instrumentId: number): Promise<void> {
  * @returns number of candles fetched and upserted
  */
 export async function ingestHourlyCandles(
-  session: KiteSession,
+  input: MarketDataInput,
   instrumentId: number,
   fromDate: Date,
   toDate: Date
 ): Promise<number> {
   if (fromDate > toDate) throw new Error('fromDate must be <= toDate');
+
+  const context = toMarketDataContext(input);
+  const provider = getMarketDataProvider(context.provider);
+  const providerInstrumentKey = await resolveProviderInstrumentKey(
+    context.provider,
+    instrumentId
+  );
+  const source = context.provider.toLowerCase();
 
   const startedAt = Date.now();
   const { lastCandle, firstCandle } = await getIngestBounds(instrumentId);
@@ -201,7 +213,6 @@ export async function ingestHourlyCandles(
 
   if (ranges.length === 0) return 0;
 
-  const kc = createKiteClient(session.accessToken);
   let totalUpserted = 0;
   let requests = 0;
 
@@ -211,16 +222,19 @@ export async function ingestHourlyCandles(
 
     while (fetchStart <= range.end) {
       const chunkEnd = computeChunkEnd(fetchStart, range.end);
-      const fromStr = toKiteDateStr(fetchStart, false);
-      const toStr   = toKiteDateStr(chunkEnd, true);
 
       await throttleHistoricalRequests();
       requests++;
 
-      let raw: Awaited<ReturnType<typeof kc.getHistoricalData>>;
+      let raw: Awaited<ReturnType<typeof provider.getHistoricalCandles>>;
       try {
-        // kiteconnect v5: getHistoricalData(token, interval, from, to).
-        raw = await kc.getHistoricalData(instrumentId, '60minute', fromStr, toStr);
+        raw = await provider.getHistoricalCandles(
+          context.credentials,
+          providerInstrumentKey,
+          '1H',
+          fetchStart,
+          chunkEnd
+        );
       } catch (err) {
         if (isPermanentError(err) || !isTransientError(err) || attempt >= MAX_REQUEST_ATTEMPTS) {
           throw err;
@@ -230,18 +244,18 @@ export async function ingestHourlyCandles(
         continue;
       }
 
-      const rows = raw.map((row) => {
-        const candleTs = new Date(row.date);
+      const bucketRows = raw.map((row) => {
+        const candleTs = row.timestamp;
         return [
           instrumentId,
           candleTs,
-          Number(row.open),
-          Number(row.high),
-          Number(row.low),
-          Number(row.close),
-          Number(row.volume),
+          row.open,
+          row.high,
+          row.low,
+          row.close,
+          row.volume,
           isWithinSession(candleTs),
-          'kite',
+          source,
         ];
       });
 
@@ -258,7 +272,7 @@ export async function ingestHourlyCandles(
           'is_session_complete',
           'source',
         ],
-        rows,
+        rows: bucketRows,
         conflictClause: `ON CONFLICT (instrument_id, candle_ts) DO UPDATE SET
         open  = EXCLUDED.open,
         high  = EXCLUDED.high,
@@ -271,7 +285,7 @@ export async function ingestHourlyCandles(
 
       // Backfill chunks must not touch the forward checkpoint.
       if (range.advanceCheckpoint && raw.length > 0) {
-        await setCheckpoint(instrumentId, new Date(raw[raw.length - 1].date));
+        await setCheckpoint(instrumentId, raw[raw.length - 1].timestamp);
       }
 
       fetchStart = new Date(chunkEnd.getTime() + DAY_MS);
@@ -294,7 +308,7 @@ export async function ingestHourlyCandles(
  * Ingest 1H candles for all active instruments.
  */
 export async function ingestAllHourlyCandles(
-  session: KiteSession,
+  input: MarketDataInput,
   fromDate: Date,
   toDate: Date,
   concurrency = 3 // lower than daily — intraday is more rate-limit sensitive
@@ -314,7 +328,7 @@ export async function ingestAllHourlyCandles(
     const p: Promise<void> = (async () => {
       if (permanentFailure) return;
       try {
-        total += await ingestHourlyCandles(session, id, fromDate, toDate);
+        total += await ingestHourlyCandles(input, id, fromDate, toDate);
       } catch (err) {
         failures.push({ instrumentId: id, message: sanitizeErrorMessage(err) });
         if (isPermanentError(err) && permanentFailure == null) permanentFailure = err;

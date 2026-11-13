@@ -21,7 +21,20 @@
 import type { KiteSession } from "./types";
 import { getDb } from "./db";
 import { encrypt, decrypt, hashSessionId } from "./crypto";
-import { isValidOwnerId } from "./live-trade/validation";
+
+const KITE_USER_ID_MAX_LENGTH = 64;
+
+/**
+ * The Kite user id is broker identity only. It must still be present to scope
+ * legacy scanner sessions, but it is never used as a DemandScan ownership key.
+ */
+function isUsableKiteUserId(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim() !== "" &&
+    Array.from(value).length <= KITE_USER_ID_MAX_LENGTH
+  );
+}
 
 // ─── Re-export helpers needed by callers ─────────────────────────────────────
 
@@ -139,6 +152,63 @@ export class DbSessionStore implements KiteSessionStore {
 
 export const sessionStore = new DbSessionStore();
 
+// ─── App-user binding ────────────────────────────────────────────────────────
+//
+// A Kite session is useful to Live Trade only when it is bound to the internal
+// user that started the OAuth flow. Ownership is resolved from the Firebase app
+// session; the binding selects the broker token, so a shared or replayed ds_sid
+// cookie can never act as another customer's broker connection.
+
+/** Records that `sessionId` (plaintext cookie value) belongs to `appUserId`. */
+export async function bindSessionToAppUser(
+  sessionId: string,
+  appUserId: string
+): Promise<void> {
+  if (!sessionId) throw new Error("sessionId is required");
+
+  const sql = getDb();
+  const hashedId = hashSessionId(sessionId);
+
+  await sql`
+    INSERT INTO kite_session_bindings (session_id_hash, app_user_id, created_at)
+    VALUES (${hashedId}, ${appUserId}::uuid, NOW())
+    ON CONFLICT (session_id_hash) DO UPDATE SET
+      app_user_id = EXCLUDED.app_user_id
+  `;
+}
+
+/**
+ * Resolves the Kite session for this cookie ONLY when it is bound to
+ * `appUserId`. Returns null for a missing, expired, unbound or foreign-bound
+ * session; callers must report missing broker connectivity rather than fall
+ * back to another connection.
+ */
+export async function getBoundKiteSession(
+  cookieHeader: string | null | undefined,
+  appUserId: string
+): Promise<KiteSession | null> {
+  if (!appUserId) return null;
+
+  const sessionId = getSessionIdFromCookies(cookieHeader);
+  if (!sessionId) return null;
+
+  const session = await sessionStore.get(sessionId);
+  if (!session) return null;
+  if (!isUsableKiteUserId(session.userId)) return null;
+
+  const sql = getDb();
+  const hashedId = hashSessionId(sessionId);
+  const rows = await sql`
+    SELECT 1
+    FROM kite_session_bindings
+    WHERE session_id_hash = ${hashedId}
+      AND app_user_id = ${appUserId}::uuid
+    LIMIT 1
+  `;
+
+  return rows.length > 0 ? session : null;
+}
+
 // ─── Cookie helpers ────────────────────────────────────────────────────────────
 
 export const SESSION_COOKIE_NAME = "ds_sid";
@@ -191,7 +261,7 @@ export async function getSessionFromRequest(
   const session = await sessionStore.get(sessionId);
   if (!session) return null;
 
-  if (!isValidOwnerId(session.userId)) {
+  if (!isUsableKiteUserId(session.userId)) {
     console.warn("[session] Rejected session with a missing or blank Kite user id.");
     return null;
   }

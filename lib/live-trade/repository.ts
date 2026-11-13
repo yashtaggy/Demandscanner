@@ -251,7 +251,7 @@ export async function createGroup(
       db.query(
         `-- lt:create-group:insert
          INSERT INTO live_trade_groups (group_id, owner_user_id, name, sort_order)
-         SELECT $1::uuid, $2::text, $3::text,
+         SELECT $1::uuid, $2::uuid, $3::text,
                 COALESCE(
                   (SELECT max(sort_order) + 1 FROM live_trade_groups WHERE owner_user_id = $2),
                   0
@@ -550,7 +550,7 @@ export async function createItem(
            timeframe, entry_price, target_price, stop_loss, notes, trade_status,
            sort_order
          )
-         SELECT $1::uuid, $2::text, inst.instrument_id, $3::uuid, $4::text,
+         SELECT $1::uuid, $2::uuid, inst.instrument_id, $3::uuid, $4::text,
                 $5::text, $6::text, $7::numeric, $8::numeric, $9::numeric,
                 $10::text, $11::text,
                 COALESCE(
@@ -1057,7 +1057,7 @@ export async function claimQuoteCooldown(
     rows = await db.query(
       `-- lt:quote-cooldown:claim
        INSERT INTO live_trade_quote_state (owner_user_id, last_request_at, updated_at)
-       VALUES ($1::text, NOW(), NOW())
+       VALUES ($1::uuid, NOW(), NOW())
        ON CONFLICT (owner_user_id) DO UPDATE
          SET last_request_at = NOW(), updated_at = NOW()
          WHERE live_trade_quote_state.last_request_at

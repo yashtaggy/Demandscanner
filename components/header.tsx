@@ -1,17 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useAppAuth } from "@/hooks/use-app-auth";
 import { formatDateTime } from "@/lib/utils";
 
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: "Super admin",
+  ADMIN: "Admin",
+  CUSTOMER: "Customer",
+};
+
 export function Header({ lastRefreshed }: { lastRefreshed: string | null }) {
-  const { status, loading, refetch } = useAuth();
+  const { status, loading: kiteLoading } = useAuth();
+  const { user: appUser, loading: appLoading, logout } = useAppAuth();
   const [loggingOut, setLoggingOut] = useState(false);
-  const router = useRouter();
   const pathname = usePathname();
 
   const handleConnect = () => {
@@ -21,17 +28,14 @@ export function Header({ lastRefreshed }: { lastRefreshed: string | null }) {
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
-      await fetch("/api/kite/logout", { method: "POST" });
-      // Refresh Next.js router cache and re-poll auth status
-      router.refresh();
-      refetch();
+      await logout();
     } finally {
       setLoggingOut(false);
     }
   };
 
-  const isAuthenticated = status?.authenticated ?? false;
   const market = status?.market;
+  const kiteConnected = status?.authenticated ?? false;
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-md">
@@ -57,6 +61,10 @@ export function Header({ lastRefreshed }: { lastRefreshed: string | null }) {
             <NavLink href="/" active={pathname === "/"}>Dashboard</NavLink>
             <NavLink href="/scanner" active={pathname === "/scanner"}>Scanner</NavLink>
             <NavLink href="/live-trade" active={pathname === "/live-trade"}>Live Trade</NavLink>
+            <NavLink href="/account/subscription" active={pathname === "/account/subscription"}>Subscription</NavLink>
+            {appUser && appUser.role !== "CUSTOMER" && (
+              <NavLink href="/admin/customers" active={pathname.startsWith("/admin")}>Admin</NavLink>
+            )}
           </nav>
 
           {/* Center status row */}
@@ -80,21 +88,18 @@ export function Header({ lastRefreshed }: { lastRefreshed: string | null }) {
             )}
           </div>
 
-          {/* Right: Connection status + actions */}
+          {/* Right: app identity + Kite connection */}
           <div className="flex items-center gap-3 shrink-0">
-            {loading ? (
+            {appLoading ? (
               <div className="h-4 w-28 animate-pulse rounded bg-slate-700" />
-            ) : isAuthenticated ? (
+            ) : appUser ? (
               <>
-                <Badge variant="success" dot>
-                  <span className="hidden sm:inline">Connected</span>
-                  <span className="sm:hidden">●</span>
+                <Badge variant={appUser.role === "CUSTOMER" ? "neutral" : "info"}>
+                  {ROLE_LABELS[appUser.role] ?? appUser.role}
                 </Badge>
-                {status?.userName && (
-                  <span className="hidden md:inline text-xs text-slate-400">
-                    {status.userName}
-                  </span>
-                )}
+                <span className="hidden md:inline text-xs text-slate-400 max-w-[160px] truncate">
+                  {appUser.displayName || appUser.email}
+                </span>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -102,22 +107,35 @@ export function Header({ lastRefreshed }: { lastRefreshed: string | null }) {
                   loading={loggingOut}
                   id="logout-button"
                 >
-                  Disconnect
+                  Sign out
                 </Button>
               </>
             ) : (
-              <>
-                <Badge variant="warning">Not connected</Badge>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={handleConnect}
-                  id="connect-button"
-                >
-                  Connect Zerodha
-                </Button>
-              </>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => { window.location.href = "/login"; }}
+                id="sign-in-button"
+              >
+                Sign in
+              </Button>
             )}
+
+            {!kiteLoading && (kiteConnected ? (
+              <Badge variant="success" dot>
+                <span className="hidden sm:inline">Kite </span>Connected
+              </Badge>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleConnect}
+                id="connect-button"
+                title="Connect Kite for broker features such as Live Trade"
+              >
+                Connect Kite
+              </Button>
+            ))}
           </div>
         </div>
 
@@ -129,6 +147,10 @@ export function Header({ lastRefreshed }: { lastRefreshed: string | null }) {
           <NavLink href="/" active={pathname === "/"}>Dashboard</NavLink>
           <NavLink href="/scanner" active={pathname === "/scanner"}>Scanner</NavLink>
           <NavLink href="/live-trade" active={pathname === "/live-trade"}>Live Trade</NavLink>
+          <NavLink href="/account/subscription" active={pathname === "/account/subscription"}>Subscription</NavLink>
+          {appUser && appUser.role !== "CUSTOMER" && (
+            <NavLink href="/admin/customers" active={pathname.startsWith("/admin")}>Admin</NavLink>
+          )}
         </nav>
       </div>
     </header>

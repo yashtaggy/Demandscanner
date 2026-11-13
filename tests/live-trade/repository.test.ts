@@ -41,8 +41,8 @@ jest.mock("@/lib/db", () => ({
   getDb: () => globalStore.__liveTradeDb,
 }));
 
-const OWNER_A = "owner-a" as LiveTradeOwnerId;
-const OWNER_B = "owner-b" as LiveTradeOwnerId;
+const OWNER_A = "0f8fad5b-d9cb-469f-a165-70867728950e" as LiveTradeOwnerId;
+const OWNER_B = "6f9619ff-8b86-d011-b42d-00c04fc964ff" as LiveTradeOwnerId;
 const OWNER_A_RAW = OWNER_A as string;
 const OWNER_B_RAW = OWNER_B as string;
 

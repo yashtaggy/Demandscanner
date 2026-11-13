@@ -4,13 +4,16 @@
  */
 
 import {
+  SYNTHETIC_EMAIL_PREFIX,
   SYNTHETIC_INSTRUMENT_BASE,
-  SYNTHETIC_OWNER_PREFIX,
   StagingRun,
   assertSyntheticInstrumentIds,
   assertSyntheticOwners,
   type Sql,
 } from "./harness";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface RecordedQuery {
   text: string;
@@ -32,12 +35,15 @@ function makeRun(runId: string): { run: StagingRun; sql: FakeSql } {
 }
 
 describe("synthetic identifiers", () => {
-  it("uses ZZTEST owners, reserved instrument ids and ZZTEST symbols", () => {
+  it("uses UUID app-user owners, reserved instrument ids and ZZTEST symbols", () => {
     const { run } = makeRun("11111111-2222-3333-4444-555555555555");
 
-    expect(run.ownerA.startsWith(SYNTHETIC_OWNER_PREFIX)).toBe(true);
-    expect(run.ownerB.startsWith(SYNTHETIC_OWNER_PREFIX)).toBe(true);
+    expect(UUID_PATTERN.test(run.ownerA)).toBe(true);
+    expect(UUID_PATTERN.test(run.ownerB)).toBe(true);
     expect(run.ownerA).not.toBe(run.ownerB);
+
+    expect(run.kiteUserIdA.startsWith(SYNTHETIC_EMAIL_PREFIX)).toBe(true);
+    expect(run.kiteUserIdB.startsWith(SYNTHETIC_EMAIL_PREFIX)).toBe(true);
 
     for (const id of Object.values(run.instrumentIds)) {
       expect(Number.isSafeInteger(id)).toBe(true);
@@ -64,7 +70,7 @@ describe("synthetic identifiers", () => {
 
   it("rejects cleanup identifiers outside the reserved space", () => {
     expect(() => assertSyntheticOwners(["real-kite-user-42"])).toThrow(
-      /synthetic ZZTEST/
+      /synthetic run UUID/
     );
     expect(() => assertSyntheticOwners(["zztest-"])).toThrow();
 
@@ -125,7 +131,7 @@ describe("cleanup scope", () => {
     }
 
     const ownerDeletes = sql.queries.filter((query) =>
-      /owner_user_id = ANY\(\$1::text\[\]\)/.test(query.text)
+      /owner_user_id = ANY\(\$1::uuid\[\]\)/.test(query.text)
     );
     expect(ownerDeletes.length).toBeGreaterThanOrEqual(3);
     for (const query of ownerDeletes) {
@@ -134,6 +140,24 @@ describe("cleanup scope", () => {
         run.ownerB as string,
       ]);
     }
+
+    const appUserDelete = sql.queries.find((query) =>
+      /DELETE FROM app_users/.test(query.text)
+    );
+    expect(appUserDelete?.text).toMatch(/lower\(email\) LIKE \$2/);
+    expect(appUserDelete?.params[0]).toEqual([
+      run.ownerA as string,
+      run.ownerB as string,
+    ]);
+    expect(appUserDelete?.params[1]).toContain(run.runId);
+
+    const sessionDelete = sql.queries.find((query) =>
+      /DELETE FROM kite_sessions/.test(query.text)
+    );
+    expect(sessionDelete?.params[0]).toEqual([
+      run.kiteUserIdA,
+      run.kiteUserIdB,
+    ]);
   });
 
   it("is safe to call more than once", async () => {

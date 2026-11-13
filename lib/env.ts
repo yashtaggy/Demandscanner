@@ -26,8 +26,70 @@ export function getKiteRedirectUrl(): string {
   return requireEnv("KITE_REDIRECT_URL");
 }
 
+// ─── Operator-owned system market-data application ───────────────────────────
+//
+// The system market-data connection is issued under a SEPARATE Kite application
+// owned by the operator. It must never reuse the customer-facing
+// KITE_API_KEY/KITE_API_SECRET pair, because those identify the customer login
+// flow. A system token is only valid for the application that issued it.
+
+export function getMarketDataKiteApiKey(): string {
+  return requireEnv("MARKET_DATA_KITE_API_KEY");
+}
+
+export function getMarketDataKiteApiSecret(): string {
+  return requireEnv("MARKET_DATA_KITE_API_SECRET");
+}
+
+export function getMarketDataKiteRedirectUrl(): string {
+  return requireEnv("MARKET_DATA_KITE_REDIRECT_URL");
+}
+
+export function areMarketDataKiteEnvVarsSet(): boolean {
+  return (
+    Boolean(process.env.MARKET_DATA_KITE_API_KEY?.trim()) &&
+    Boolean(process.env.MARKET_DATA_KITE_API_SECRET?.trim()) &&
+    Boolean(process.env.MARKET_DATA_KITE_REDIRECT_URL?.trim())
+  );
+}
+
 export function getDatabaseUrl(): string {
   return requireEnv("DATABASE_URL");
+}
+
+// ─── Firebase Admin (server only) ────────────────────────────────────────────
+
+export interface FirebaseAdminConfig {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+}
+
+export function getFirebaseAdminConfig(): FirebaseAdminConfig {
+  return {
+    projectId: requireEnv("FIREBASE_PROJECT_ID"),
+    clientEmail: requireEnv("FIREBASE_CLIENT_EMAIL"),
+    // Vercel and shell env files store literal "\n" sequences; Firebase needs
+    // real newlines in the PEM block.
+    privateKey: requireEnv("FIREBASE_PRIVATE_KEY").replace(/\\n/g, "\n"),
+  };
+}
+
+export function isFirebaseAdminConfigured(): boolean {
+  return (
+    Boolean(process.env.FIREBASE_PROJECT_ID?.trim()) &&
+    Boolean(process.env.FIREBASE_CLIENT_EMAIL?.trim()) &&
+    Boolean(process.env.FIREBASE_PRIVATE_KEY?.trim())
+  );
+}
+
+export function isFirebaseClientConfigured(): boolean {
+  return (
+    Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim()) &&
+    Boolean(process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim()) &&
+    Boolean(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim()) &&
+    Boolean(process.env.NEXT_PUBLIC_FIREBASE_APP_ID?.trim())
+  );
 }
 
 /**

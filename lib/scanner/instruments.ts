@@ -1,31 +1,33 @@
 import { getDb } from "../db";
-import { createKiteClient } from "../kite-client";
-import type { KiteSession } from "../types";
+import { toMarketDataContext, type MarketDataInput } from "@/lib/market-data/context";
+import { getMarketDataProvider } from "@/lib/market-data/provider";
+import type { ProviderInstrument } from "@/lib/market-data/types";
 import { bulkUpsert } from "./bulk";
 import { seedNifty500Membership, type MembershipSeedResult } from "./universe";
 
 /**
- * Extract NSE equity rows from a Kite instrument master.
- * Deduplicated by instrument token (the master can contain repeated tokens).
+ * Extract NSE equity rows from a provider instrument master.
+ * Deduplicated by provider instrument key (the master can contain repeats).
  */
 function nseEquityRows(
-  rawInstruments: any[]
+  rawInstruments: ProviderInstrument[],
+  source: string
 ): Array<[number, string, string, string | null, boolean, string, Date]> {
   const byToken = new Map<number, [number, string, string, string | null, boolean, string, Date]>();
   const now = new Date();
 
   for (const raw of rawInstruments) {
     if (raw.segment !== "NSE" && raw.segment !== "NSE-EQ") continue;
-    if (raw.instrument_type !== "EQ") continue;
-    const token = Number(raw.instrument_token);
+    if (raw.instrumentType !== "EQ") continue;
+    const token = Number(raw.providerInstrumentKey);
     if (!Number.isFinite(token)) continue;
     byToken.set(token, [
       token,
-      raw.tradingsymbol as string,
-      raw.exchange as string,
-      (raw.name ?? null) as string | null,
+      raw.tradingSymbol,
+      raw.exchange,
+      raw.companyName,
       true,
-      "kite",
+      source,
       now,
     ]);
   }
@@ -74,12 +76,16 @@ export interface InstrumentSyncResult {
  * re-downloaded the full master for every 120 instruments.
  */
 export async function syncInstrumentMaster(
-  session: KiteSession
+  input: MarketDataInput
 ): Promise<InstrumentSyncResult> {
-  const kc = createKiteClient(session.accessToken);
-  const rawInstruments = (await kc.getInstruments("NSE")) as unknown as any[];
+  const context = toMarketDataContext(input);
+  const provider = getMarketDataProvider(context.provider);
+  const rawInstruments = await provider.listInstruments(
+    context.credentials,
+    "NSE"
+  );
 
-  const rows = nseEquityRows(rawInstruments);
+  const rows = nseEquityRows(rawInstruments, context.provider.toLowerCase());
   const upserted = await upsertInstrumentRows(rows);
   const universe = await seedNifty500Membership();
 
@@ -93,8 +99,8 @@ export async function syncInstrumentMaster(
 }
 
 /** Full instrument sync (kept for local/long-running callers). */
-export async function syncNseInstruments(session: KiteSession): Promise<number> {
-  return (await syncInstrumentMaster(session)).upserted;
+export async function syncNseInstruments(input: MarketDataInput): Promise<number> {
+  return (await syncInstrumentMaster(input)).upserted;
 }
 
 export async function listActiveInstrumentIds(limitToIds?: number[]): Promise<number[]> {
@@ -111,7 +117,7 @@ export async function listActiveInstrumentIds(limitToIds?: number[]): Promise<nu
       SELECT instrument_id FROM instruments WHERE active = true ORDER BY instrument_id
     `;
   }
-  return rows.map((r: any) => Number(r.instrument_id));
+  return rows.map((r: Record<string, unknown>) => Number(r.instrument_id));
 }
 
 export async function resolveInstrumentIdsBySymbol(symbols: string[]): Promise<number[]> {
@@ -122,7 +128,7 @@ export async function resolveInstrumentIdsBySymbol(symbols: string[]): Promise<n
     WHERE active = true AND symbol = ANY(${symbols}::text[])
     ORDER BY instrument_id
   `;
-  return rows.map((r: any) => Number(r.instrument_id));
+  return rows.map((r: Record<string, unknown>) => Number(r.instrument_id));
 }
 
 /** Alias for backward compatibility with orchestrator imports. */

@@ -2,8 +2,9 @@
  * Route tests for the Phase 5 market snapshot and zone endpoints.
  *
  * Real HTTP helper, real query parser, real service and real repository run
- * against the stateful fake database. Only the Next response object, the Kite
- * session lookup and the Kite quote call are substituted.
+ * against the stateful fake database. Only the Next response object, the app
+ * session, the bound Kite session lookup and the Kite quote call are
+ * substituted.
  */
 
 jest.mock("next/server", () => ({
@@ -19,8 +20,12 @@ jest.mock("next/server", () => ({
   },
 }));
 
+jest.mock("@/lib/subscriptions/entitlements", () => ({
+  requireActiveSubscription: jest.fn(),
+}));
+
 jest.mock("@/lib/kite-session", () => ({
-  getSessionFromRequest: jest.fn(),
+  getBoundKiteSession: jest.fn(),
 }));
 
 jest.mock("@/lib/db", () => ({
@@ -32,8 +37,10 @@ jest.mock("@/lib/kite-client", () => ({
 }));
 
 import type { NextRequest } from "next/server";
-import type { QuoteData } from "@/lib/types";
-import { getSessionFromRequest } from "@/lib/kite-session";
+import type { KiteSession, QuoteData } from "@/lib/types";
+import { requireActiveSubscription } from "@/lib/subscriptions/entitlements";
+import { AppAuthError, type AppUser } from "@/lib/auth/types";
+import { getBoundKiteSession } from "@/lib/kite-session";
 import { getQuotes } from "@/lib/kite-client";
 import { GET as getQuotesRoute } from "@/app/api/live-trade/quotes/route";
 import { GET as getZonesRoute } from "@/app/api/live-trade/zones/route";
@@ -44,8 +51,11 @@ const globalStore = globalThis as typeof globalThis & {
   __liveTradeDb?: unknown;
 };
 
-const sessionMock = getSessionFromRequest as jest.Mock;
+const appUserMock = requireActiveSubscription as jest.Mock;
+const brokerSessionMock = getBoundKiteSession as jest.Mock;
 const quotesMock = getQuotes as jest.Mock;
+const OWNER_ID = "0f8fad5b-d9cb-469f-a165-70867728950e";
+const OTHER_OWNER_ID = "6f9619ff-8b86-d011-b42d-00c04fc964ff";
 
 type JsonBody = {
   success?: boolean;
@@ -82,15 +92,48 @@ async function call(
   };
 }
 
-function signIn(
-  userId: string | null = "owner-a",
-  accessToken = "server-side-access-token"
+function appUser(userId = OWNER_ID): AppUser {
+  return {
+    userId,
+    email: "owner@example.com",
+    displayName: null,
+    status: "ACTIVE",
+    role: "CUSTOMER",
+  };
+}
+
+function signIn(userId = OWNER_ID): void {
+  appUserMock.mockResolvedValue({
+    user: appUser(userId),
+    subscription: { entitled: true, today: "2026-11-13", current: null, history: [] },
+  });
+}
+
+function signedOut(
+  reason:
+    | "UNAUTHENTICATED"
+    | "INVALID_SESSION"
+    | "NO_IDENTITY"
+    | "SUSPENDED"
+    | "DISABLED" = "UNAUTHENTICATED"
 ): void {
-  sessionMock.mockResolvedValue(
-    userId === null
-      ? null
-      : { userId, accessToken, userName: userId, email: `${userId}@example.com` }
-  );
+  appUserMock.mockRejectedValue(new AppAuthError(reason));
+}
+
+function kiteSession(overrides: Partial<KiteSession> = {}): KiteSession {
+  return {
+    accessToken: "server-side-access-token",
+    userId: "ZP0001",
+    userName: "Owner",
+    email: "owner@example.com",
+    loginTime: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+    ...overrides,
+  };
+}
+
+function connectBroker(session: KiteSession | null = kiteSession()): void {
+  brokerSessionMock.mockResolvedValue(session);
 }
 
 function quoteData(input: {
@@ -130,8 +173,8 @@ function mockProvider(map: Record<string, QuoteData>): void {
 function seedBoard(): void {
   mockFake.seedInstrument({ instrument_id: 1, symbol: "INFY" });
   mockFake.seedInstrument({ instrument_id: 2, symbol: "TCS" });
-  mockFake.seedItem({ owner: "owner-a", instrumentId: 1 });
-  mockFake.seedItem({ owner: "owner-a", instrumentId: 2 });
+  mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 1 });
+  mockFake.seedItem({ owner: "0f8fad5b-d9cb-469f-a165-70867728950e", instrumentId: 2 });
   mockFake.seedMembership(1);
   mockFake.seedMembership(2);
 }
@@ -139,9 +182,11 @@ function seedBoard(): void {
 beforeEach(() => {
   mockFake.reset();
   globalStore.__liveTradeDb = mockFake.sql;
-  sessionMock.mockReset();
+  appUserMock.mockReset();
+  brokerSessionMock.mockReset();
   quotesMock.mockReset();
   signIn();
+  connectBroker();
   seedBoard();
   jest.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -154,46 +199,66 @@ afterEach(() => {
 
 describe("authentication", () => {
   it.each([
-    ["a missing session", () => signIn(null)],
-    ["a blank owner id", () => signIn("   ")],
-    ["an owner id over 64 characters", () => signIn("x".repeat(65))],
-  ])("rejects %s on the quotes endpoint without database work", async (_label, arrange) => {
-    arrange();
-    const { status, body } = await call(getQuotesRoute, request("/api/live-trade/quotes"));
+    ["a missing app session", () => signedOut("UNAUTHENTICATED"), 401, "UNAUTHENTICATED"],
+    ["an invalid app session", () => signedOut("INVALID_SESSION"), 401, "UNAUTHENTICATED"],
+    ["a suspended account", () => signedOut("SUSPENDED"), 403, "FORBIDDEN"],
+    ["a disabled account", () => signedOut("DISABLED"), 403, "FORBIDDEN"],
+  ])(
+    "rejects %s on the quotes endpoint without database work",
+    async (_label, arrange, status, code) => {
+      arrange();
+      const { status: actual, body } = await call(
+        getQuotesRoute,
+        request("/api/live-trade/quotes")
+      );
+      expect(actual).toBe(status);
+      expect(body.code).toBe(code);
+      expect(mockFake.standaloneMarkers).toEqual([]);
+      expect(brokerSessionMock).not.toHaveBeenCalled();
+    }
+  );
+
+  it("rejects an unauthenticated zones request", async () => {
+    signedOut("UNAUTHENTICATED");
+    const { status, body } = await call(getZonesRoute, request("/api/live-trade/zones"));
     expect(status).toBe(401);
     expect(body).toEqual({
-      error: "Authentication required.",
+      error: "Sign in to DemandScan to use Live Trade.",
       code: "UNAUTHENTICATED",
     });
     expect(mockFake.standaloneMarkers).toEqual([]);
   });
 
-  it("rejects an unauthenticated zones request", async () => {
-    signIn(null);
-    const { status, body } = await call(getZonesRoute, request("/api/live-trade/zones"));
-    expect(status).toBe(401);
-    expect(body.code).toBe("UNAUTHENTICATED");
-    expect(mockFake.standaloneMarkers).toEqual([]);
-  });
-
-  it("maps a session-store failure to a sanitized 500", async () => {
-    sessionMock.mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.1:5432"));
+  it("maps an identity-store failure to a sanitized 500", async () => {
+    appUserMock.mockRejectedValue(new Error("connect ECONNREFUSED 10.0.0.1:5432"));
     const { status, body } = await call(getQuotesRoute, request("/api/live-trade/quotes"));
     expect(status).toBe(500);
     expect(body).toEqual({ error: "An unexpected error occurred.", code: "INTERNAL" });
     expect(JSON.stringify(body)).not.toContain("ECONNREFUSED");
   });
 
+  it("returns 409 BROKER_NOT_CONNECTED without a provider call when no Kite session is bound", async () => {
+    connectBroker(null);
+    const { status, body } = await call(getQuotesRoute, request("/api/live-trade/quotes"));
+    expect(status).toBe(409);
+    expect(body).toEqual({
+      error: "Connect your Kite account to load live quotes.",
+      code: "BROKER_NOT_CONNECTED",
+    });
+    expect(brokerSessionMock).toHaveBeenCalledWith(expect.any(String), OWNER_ID);
+    expect(quotesMock).not.toHaveBeenCalled();
+  });
+
   it("derives the owner from the session, ignoring query parameters and headers", async () => {
     mockFake.seedInstrument({ instrument_id: 3, symbol: "FOREIGN" });
-    mockFake.seedItem({ owner: "owner-b", instrumentId: 3 });
+    mockFake.seedItem({ owner: OTHER_OWNER_ID, instrumentId: 3 });
     mockProvider({ "NSE:INFY": quoteData(), "NSE:TCS": quoteData() });
 
     const { status, body } = await call(
       getQuotesRoute,
       request(
         "/api/live-trade/quotes?ownerId=owner-b&owner_user_id=owner-b",
-        { "x-owner-id": "owner-b", "x-owner-user-id": "owner-b" }
+        { "x-owner-id": "6f9619ff-8b86-d011-b42d-00c04fc964ff", "x-owner-user-id": "6f9619ff-8b86-d011-b42d-00c04fc964ff" }
       )
     );
 
@@ -369,7 +434,7 @@ describe("GET /api/live-trade/quotes", () => {
 
   it("returns NOT_FOUND for a foreign instrument id without revealing ownership", async () => {
     mockFake.seedInstrument({ instrument_id: 3, symbol: "FOREIGN" });
-    mockFake.seedItem({ owner: "owner-b", instrumentId: 3 });
+    mockFake.seedItem({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", instrumentId: 3 });
     mockProvider({});
 
     const { status, body } = await call(
@@ -480,7 +545,7 @@ describe("GET /api/live-trade/zones", () => {
 
   it("isolates one owner's zones from another owner's rows", async () => {
     mockFake.seedInstrument({ instrument_id: 3, symbol: "FOREIGN" });
-    mockFake.seedItem({ owner: "owner-b", instrumentId: 3 });
+    mockFake.seedItem({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", instrumentId: 3 });
     mockFake.seedZone({ instrumentId: 3, side: "DEMAND", proximal: 999 });
 
     const { body } = await call(getZonesRoute, request("/api/live-trade/zones"));
@@ -596,7 +661,7 @@ describe("GET /api/live-trade/zones", () => {
 
   it("returns NOT_FOUND for a foreign instrument id", async () => {
     mockFake.seedInstrument({ instrument_id: 3, symbol: "FOREIGN" });
-    mockFake.seedItem({ owner: "owner-b", instrumentId: 3 });
+    mockFake.seedItem({ owner: "6f9619ff-8b86-d011-b42d-00c04fc964ff", instrumentId: 3 });
     mockFake.seedZone({ instrumentId: 3, side: "DEMAND", proximal: 999 });
 
     const { status, body } = await call(

@@ -253,6 +253,15 @@ steps are in `docs/live-trade-production-checklist.md`.
 | `scan_job_batches` | Per-batch checkpoint/audit rows for the browser-driven scan worker |
 | `scanner_configs` | Versioned scanner configuration snapshots |
 | `ingestion_checkpoints` | Per-instrument last-ingested date for incremental fetches |
+| `app_users` | Internal DemandScan users — the future ownership identifier (Phase 1) |
+| `user_identities` | Provider identity (Firebase UID) mapped to an internal user (Phase 1) |
+| `admin_audit_log` | Audit trail for future administrative actions (Phase 1) |
+| `instrument_aliases` | Broker-specific instrument keys mapped to existing instrument ids (Phase 1) |
+
+The Phase 1 identity foundation and its migration procedure are documented in
+[`docs/phase-1-internal-identity.md`](docs/phase-1-internal-identity.md). The
+four Phase 1 tables are applied with `npm run db:phase1:migrate` (a guarded
+single-file runner), **not** `npm run db:migrate`.
 
 ---
 

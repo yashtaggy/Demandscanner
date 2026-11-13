@@ -9,15 +9,25 @@ import { FilterBar } from "@/components/filter-bar";
 import { ScannerPanel } from "@/components/scanner-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/hooks/use-auth";
+import { useAppAuth } from "@/hooks/use-app-auth";
 import { useStocks } from "@/hooks/use-stocks";
+import { useSubscription } from "@/hooks/use-subscription";
+import { SubscriptionAccessNotice } from "@/components/subscription/access-notice";
 
 type SortField = "symbol" | "price" | "change" | "changePercent" | "volume";
 type SortOrder = "asc" | "desc";
 
 export default function DashboardPage() {
-  const { status: authStatus } = useAuth();
-  const isAuthenticated = authStatus?.authenticated ?? false;
+  const { user: appUser, loading: authLoading } = useAppAuth();
+  const isAuthenticated = appUser !== null;
+  const { data: subscription, loading: subscriptionLoading } =
+    useSubscription(isAuthenticated);
+  const accessBlocked =
+    isAuthenticated &&
+    !subscriptionLoading &&
+    subscription !== null &&
+    subscription.subscriptionRequired &&
+    !subscription.entitled;
 
   // ─── Filter/sort state ───────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
@@ -80,8 +90,12 @@ export default function DashboardPage() {
         {/* Auth error banner */}
         <AuthErrorBanner />
 
+        {accessBlocked ? (
+          <SubscriptionAccessNotice current={subscription?.current ?? null} />
+        ) : (
+          <>
         {/* Not connected state */}
-        {!isAuthenticated && authStatus !== null && (
+        {!isAuthenticated && !authLoading && (
           <ConnectPrompt />
         )}
 
@@ -153,6 +167,8 @@ export default function DashboardPage() {
             <ScannerPanel isAuthenticated={isAuthenticated} />
           </aside>
         </div>
+          </>
+        )}
       </main>
     </div>
   );
@@ -203,19 +219,19 @@ function ConnectPrompt() {
         </div>
       </div>
       <div className="space-y-1">
-        <h3 className="text-base font-semibold text-slate-100">Connect your Zerodha account</h3>
+        <h3 className="text-base font-semibold text-slate-100">Sign in to DemandScan</h3>
         <p className="text-sm text-slate-500 max-w-sm mx-auto">
-          Sign in with Kite Connect to load live NSE market data. Your credentials are handled
-          server-side and never exposed to the browser.
+          Use the account your administrator provisioned. Market data is supplied by the
+          platform, so you do not need your own broker login for the dashboard or scanner.
         </p>
       </div>
       <Button
         variant="primary"
         size="lg"
-        onClick={() => { window.location.href = "/api/kite/login"; }}
-        id="connect-zerodha-main-button"
+        onClick={() => { window.location.href = "/login"; }}
+        id="sign-in-main-button"
       >
-        Connect with Zerodha
+        Sign in
       </Button>
     </div>
   );

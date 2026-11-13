@@ -11,6 +11,8 @@ export const LIVE_TRADE_ERROR_STATUS = {
   UNAUTHENTICATED: 401,
   TOKEN_EXPIRED: 401,
   FORBIDDEN: 403,
+  SUBSCRIPTION_REQUIRED: 403,
+  BROKER_NOT_CONNECTED: 409,
   NOT_FOUND: 404,
   INVALID_BODY: 400,
   INVALID_QUERY: 400,
@@ -33,9 +35,11 @@ export const LIVE_TRADE_ERROR_STATUS = {
 export type LiveTradeErrorCode = keyof typeof LIVE_TRADE_ERROR_STATUS;
 
 const DEFAULT_MESSAGES: Record<LiveTradeErrorCode, string> = {
-  UNAUTHENTICATED: "Authentication required.",
-  TOKEN_EXPIRED: "The Kite session has expired. Please sign in again.",
+  UNAUTHENTICATED: "Sign in to DemandScan to use Live Trade.",
+  TOKEN_EXPIRED: "The Kite connection has expired. Reconnect Kite to refresh quotes.",
   FORBIDDEN: "You do not have permission to perform this action.",
+  SUBSCRIPTION_REQUIRED: "An active subscription is required to use Live Trade.",
+  BROKER_NOT_CONNECTED: "Connect your Kite account to load live quotes.",
   NOT_FOUND: "The requested record was not found.",
   INVALID_BODY: "The request body is invalid.",
   INVALID_QUERY: "The request parameters are invalid.",

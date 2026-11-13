@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Header } from "@/components/header";
-import { useAuth } from "@/hooks/use-auth";
+import { useAppAuth } from "@/hooks/use-app-auth";
+import { useSubscription } from "@/hooks/use-subscription";
+import { SubscriptionAccessNotice } from "@/components/subscription/access-notice";
 import { useZones, DEFAULT_SCANNER_FILTERS, type ZoneFilters } from "@/hooks/use-zones";
 import { useScannerJob } from "@/hooks/use-scanner-job";
 import { ScanProgress } from "@/components/scanner/ScanProgress";
@@ -16,8 +18,16 @@ import type { Zone } from "@/lib/scanner/types";
 const PAGE_SIZE = 100;
 
 export default function ScannerPage() {
-  const { status: authStatus } = useAuth();
-  const isAuthenticated = authStatus?.authenticated ?? false;
+  const { user: appUser, loading: authLoading } = useAppAuth();
+  const isAuthenticated = appUser !== null;
+  const { data: subscription, loading: subscriptionLoading } =
+    useSubscription(isAuthenticated);
+  const accessBlocked =
+    isAuthenticated &&
+    !subscriptionLoading &&
+    subscription !== null &&
+    subscription.subscriptionRequired &&
+    !subscription.entitled;
 
   // ── Filter / pagination state ────────────────────────────────────────────
   const [filters, setFilters] = useState<ZoneFilters>({
@@ -129,22 +139,29 @@ export default function ScannerPage() {
         </div>
 
         {/* ── Not-authenticated banner ── */}
-        {!isAuthenticated && authStatus !== null && (
+        {!isAuthenticated && !authLoading && (
           <div className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-6 text-center space-y-3">
-            <p className="text-sm text-slate-400">Connect your Zerodha account to run the scanner.</p>
+            <p className="text-sm text-slate-400">
+              Sign in with your DemandScan account to run the scanner.
+            </p>
             <Button
               variant="primary"
               size="sm"
-              onClick={() => { window.location.href = "/api/kite/login"; }}
-              id="scanner-connect-btn"
+              onClick={() => { window.location.href = "/login"; }}
+              id="scanner-sign-in-btn"
             >
-              Connect with Zerodha
+              Sign in
             </Button>
           </div>
         )}
 
+        {/* ── Inactive-subscription notice ── */}
+        {isAuthenticated && accessBlocked && (
+          <SubscriptionAccessNotice current={subscription?.current ?? null} />
+        )}
+
         {/* ── Main layout ── */}
-        {isAuthenticated && (
+        {isAuthenticated && !accessBlocked && (
           <div className="flex gap-6 items-start">
             {/* ── Left sidebar: controls ── */}
             <aside className="w-72 shrink-0 space-y-4">

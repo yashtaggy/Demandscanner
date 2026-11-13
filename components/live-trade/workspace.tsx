@@ -44,6 +44,8 @@ import {
 
 interface LiveTradeWorkspaceProps {
   authMarket: MarketStatusView | null;
+  /** null while the browser is still checking broker connectivity. */
+  brokerConnected: boolean | null;
 }
 
 interface WatchlistFilters {
@@ -142,15 +144,37 @@ function ReconnectLink() {
       variant="primary"
       size="sm"
       onClick={() => {
-        window.location.href = "/api/kite/login";
+        window.location.assign(
+          new URL("/api/kite/login", window.location.origin).toString()
+        );
       }}
     >
-      Reconnect Zerodha
+      Connect Kite
     </Button>
   );
 }
 
-export function LiveTradeWorkspace({ authMarket }: LiveTradeWorkspaceProps) {
+function SignInLink() {
+  return (
+    <Button
+      type="button"
+      variant="primary"
+      size="sm"
+      onClick={() => {
+        window.location.assign(
+          new URL("/login?next=%2Flive-trade", window.location.origin).toString()
+        );
+      }}
+    >
+      Sign in
+    </Button>
+  );
+}
+
+export function LiveTradeWorkspace({
+  authMarket,
+  brokerConnected,
+}: LiveTradeWorkspaceProps) {
   const { board, loading, refreshing, error, refetch, runBoardTask } =
     useLiveTradeBoard(true);
   const { toasts, push, dismiss } = useToasts();
@@ -535,8 +559,12 @@ export function LiveTradeWorkspace({ authMarket }: LiveTradeWorkspaceProps) {
     });
   }
 
-  const sessionExpired =
-    error?.status === 401 || displayState === "sign-in";
+  const appSessionExpired = error?.status === 401;
+  const brokerIssue =
+    brokerConnected === false ||
+    displayState === "broker" ||
+    quoteError?.code === "BROKER_NOT_CONNECTED" ||
+    quoteError?.code === "TOKEN_EXPIRED";
 
   return (
     <div className="space-y-4">
@@ -554,25 +582,43 @@ export function LiveTradeWorkspace({ authMarket }: LiveTradeWorkspaceProps) {
         onRefreshQuotes={refreshQuotes}
       />
 
-      {sessionExpired && (
+      {appSessionExpired && (
         <div
           role="alert"
           className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
             <p className="text-sm font-medium text-amber-300">
-              Your Kite session needs attention
+              Your DemandScan session needs attention
             </p>
             <p className="mt-0.5 text-xs text-amber-400/80">
-              Board changes and quotes require a connected session. Existing
-              data stays visible but may be out of date.
+              Sign in again to view and change your board. Nothing has been
+              removed from your workspace.
+            </p>
+          </div>
+          <SignInLink />
+        </div>
+      )}
+
+      {brokerIssue && !appSessionExpired && (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <p className="text-sm font-medium text-amber-300">
+              Connect Kite to load live quotes
+            </p>
+            <p className="mt-0.5 text-xs text-amber-400/80">
+              Your board and plans stay available. Quotes require your own Kite
+              connection and are never fetched from another account.
             </p>
           </div>
           <ReconnectLink />
         </div>
       )}
 
-      {error && !sessionExpired && (
+      {error && !appSessionExpired && (
         <div
           role="alert"
           className="flex flex-col gap-3 rounded-xl border border-rose-500/25 bg-rose-500/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"

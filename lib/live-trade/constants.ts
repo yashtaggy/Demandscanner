@@ -60,7 +60,6 @@ export const LIVE_TRADE_GROUP_LIMIT = 20;
 export const LIVE_TRADE_NOTES_MAX_LENGTH = 2000;
 export const LIVE_TRADE_GROUP_NAME_MIN_LENGTH = 1;
 export const LIVE_TRADE_GROUP_NAME_MAX_LENGTH = 60;
-export const LIVE_TRADE_OWNER_ID_MAX_LENGTH = 64;
 
 /** NUMERIC(18,4) with a sane upper bound for Indian equity prices. */
 export const LIVE_TRADE_PRICE_MAX = 1_000_000_000;

@@ -1,6 +1,10 @@
 import { getDb } from "../db";
-import { createKiteClient } from "../kite-client";
-import type { KiteSession } from "../types";
+import {
+  toMarketDataContext,
+  type MarketDataInput,
+} from "@/lib/market-data/context";
+import { resolveProviderInstrumentKey } from "@/lib/market-data/instrument-resolver";
+import { getMarketDataProvider } from "@/lib/market-data/provider";
 import type { Candle } from "./types";
 import { bulkUpsert } from "./bulk";
 import {
@@ -142,12 +146,20 @@ async function updateCoverage(instrumentId: number): Promise<void> {
  * @returns number of candles fetched and upserted
  */
 export async function ingestDailyCandles(
-  session: KiteSession,
+  input: MarketDataInput,
   instrumentId: number,
   fromDate: Date,
   toDate: Date
 ): Promise<number> {
   if (fromDate > toDate) throw new Error("fromDate must be <= toDate");
+
+  const context = toMarketDataContext(input);
+  const provider = getMarketDataProvider(context.provider);
+  const providerInstrumentKey = await resolveProviderInstrumentKey(
+    context.provider,
+    instrumentId
+  );
+  const source = context.provider.toLowerCase();
 
   const startedAt = Date.now();
   const { lastCandle, firstCandle } = await getIngestBounds(instrumentId);
@@ -185,8 +197,6 @@ export async function ingestDailyCandles(
 
   if (ranges.length === 0) return 0;
 
-  const kc = createKiteClient(session.accessToken);
-
   let totalUpserted = 0;
   let requests = 0;
 
@@ -196,16 +206,21 @@ export async function ingestDailyCandles(
 
     while (fetchStart <= range.end) {
       const chunkEnd = computeChunkEnd(fetchStart, range.end);
-      const fromStr = fetchStart.toISOString().split("T")[0] + " 09:15:00";
-      const toStr = chunkEnd.toISOString().split("T")[0] + " 15:30:00";
 
       await throttleHistoricalRequests();
       requests++;
 
-      let raw: Awaited<ReturnType<typeof kc.getHistoricalData>>;
+      let raw: Awaited<
+        ReturnType<typeof provider.getHistoricalCandles>
+      >;
       try {
-        // kiteconnect v5: getHistoricalData(token, interval, from, to).
-        raw = await kc.getHistoricalData(instrumentId, "day", fromStr, toStr);
+        raw = await provider.getHistoricalCandles(
+          context.credentials,
+          providerInstrumentKey,
+          "1D",
+          fetchStart,
+          chunkEnd
+        );
       } catch (err) {
         if (isPermanentError(err) || !isTransientError(err) || attempt >= MAX_REQUEST_ATTEMPTS) {
           throw err;
@@ -217,13 +232,13 @@ export async function ingestDailyCandles(
 
       const candles: Candle[] = raw.map((row) => ({
         instrumentId,
-        date: new Date(row.date),
-        open: Number(row.open),
-        high: Number(row.high),
-        low: Number(row.low),
-        close: Number(row.close),
-        volume: Number(row.volume),
-        source: "kite",
+        date: row.timestamp,
+        open: row.open,
+        high: row.high,
+        low: row.low,
+        close: row.close,
+        volume: row.volume,
+        source,
       }));
 
       totalUpserted += await upsertCandles(candles);

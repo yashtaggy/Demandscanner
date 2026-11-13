@@ -103,16 +103,13 @@ describe("Live Trade enums", () => {
 // ─── Owner identity ───────────────────────────────────────────────────────────
 
 describe("isValidOwnerId", () => {
-  it("accepts a valid Kite user id", () => {
-    expect(isValidOwnerId("ZP0001")).toBe(true);
+  it("accepts a canonical app-user UUID", () => {
+    expect(isValidOwnerId(VALID_UUID)).toBe(true);
+    expect(isValidOwnerId(VALID_UUID.toUpperCase())).toBe(true);
   });
 
-  it("accepts an id at the 64-character boundary", () => {
-    expect(isValidOwnerId("A".repeat(64))).toBe(true);
-  });
-
-  it("rejects an id longer than 64 characters", () => {
-    expect(isValidOwnerId("A".repeat(65))).toBe(false);
+  it("rejects a Kite-style user id", () => {
+    expect(isValidOwnerId("ZP0001")).toBe(false);
   });
 
   it("rejects missing and non-string values", () => {
@@ -121,10 +118,11 @@ describe("isValidOwnerId", () => {
     expect(isValidOwnerId(1234)).toBe(false);
   });
 
-  it("rejects empty and whitespace-only ids", () => {
+  it("rejects empty, whitespace and malformed ids", () => {
     expect(isValidOwnerId("")).toBe(false);
     expect(isValidOwnerId("   ")).toBe(false);
     expect(isValidOwnerId("\t\n")).toBe(false);
+    expect(isValidOwnerId("0f8fad5b-d9cb-469f-a165-70867728950")).toBe(false);
   });
 });
 

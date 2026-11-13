@@ -150,7 +150,7 @@ export function useScannerJob(): UseScannerJobReturn {
 
           if (res.status === 401) {
             giveUp(
-              "Session expired. Reconnect Zerodha, then press Run scan to resume."
+              "Your session expired. Sign in again, then press Run scan to resume."
             );
             break;
           }
@@ -301,7 +301,7 @@ export function useScannerJob(): UseScannerJobReturn {
         }
 
         if (res.status === 401) {
-          throw new Error("Your session expired. Reconnect Zerodha and try again.");
+          throw new Error("Your session expired. Sign in again and try again.");
         }
 
         if (!res.ok) {

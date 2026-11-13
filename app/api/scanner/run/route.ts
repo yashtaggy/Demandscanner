@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getSessionIdFromCookies, requireSession } from '@/lib/kite-session';
+import { getSessionFromRequest, getSessionIdFromCookies } from '@/lib/kite-session';
 import { hashSessionId } from '@/lib/crypto';
+import { requireActiveSubscription } from '@/lib/subscriptions/entitlements';
+import { authErrorResponse } from '@/lib/auth/http';
 import { getOrCreateDefaultConfig } from '@/lib/scanner/config';
 import { createScanJob, findActiveScanJob, getScanBatchStats, getScanJob, retireStaleScanJobs } from '@/lib/scanner/jobs';
 import { processScanBatch } from '@/lib/scanner/batchRunner';
+import { MarketDataUnavailableError } from '@/lib/market-data/errors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,22 +22,23 @@ export const maxDuration = 60;
  */
 export async function GET(req: NextRequest) {
   const cookie = req.headers.get('cookie');
+  let user;
   try {
-    await requireSession(cookie);
-  } catch {
-    return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
-  }
-  const sessionId = getSessionIdFromCookies(cookie);
-  if (!sessionId) {
-    return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
+    user = (await requireActiveSubscription(cookie)).user;
+  } catch (err) {
+    return authErrorResponse(err);
   }
 
-  const sessionHash = hashSessionId(sessionId);
+  // Best-effort Kite context: only used to adopt in-flight jobs created before
+  // Phase 2. App access never depends on a Kite session.
+  const sessionId = getSessionIdFromCookies(cookie);
+  const sessionIdHash = sessionId ? hashSessionId(sessionId) : null;
+
   // Retire abandoned jobs first so an old, unreachable scan cannot be resumed
   // automatically after deployment.
-  await retireStaleScanJobs(sessionHash);
+  await retireStaleScanJobs({ userId: user.userId, sessionIdHash });
 
-  const active = await findActiveScanJob(sessionHash);
+  const active = await findActiveScanJob({ userId: user.userId, sessionIdHash });
   if (!active) {
     return NextResponse.json({ jobId: null, moreRemaining: false, job: null });
   }
@@ -67,22 +71,22 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   const cookie = req.headers.get('cookie');
-  let session;
+  let user;
   try {
-    session = await requireSession(cookie);
-  } catch {
-    return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
+    user = (await requireActiveSubscription(cookie)).user;
+  } catch (err) {
+    return authErrorResponse(err);
   }
 
   const sessionId = getSessionIdFromCookies(cookie);
-  if (!sessionId) {
-    return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });
-  }
-  const sessionIdHash = hashSessionId(sessionId);
+  const sessionIdHash = sessionId ? hashSessionId(sessionId) : null;
+  // Optional customer-session fallback for staging only; system market data is
+  // preferred and no customer Kite login is required when it is configured.
+  const session = await getSessionFromRequest(cookie);
 
-  await retireStaleScanJobs(sessionIdHash);
+  await retireStaleScanJobs({ userId: user.userId, sessionIdHash });
 
-  const active = await findActiveScanJob(sessionIdHash);
+  const active = await findActiveScanJob({ userId: user.userId, sessionIdHash });
   if (active) {
     return NextResponse.json(
       {
@@ -94,9 +98,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: any = {};
+  let body: Record<string, unknown> = {};
   try {
-    body = await req.json();
+    body = (await req.json()) as Record<string, unknown>;
   } catch {
     // defaults
   }
@@ -105,8 +109,8 @@ export async function POST(req: NextRequest) {
   const defaultFrom = new Date(now);
   defaultFrom.setFullYear(defaultFrom.getFullYear() - 1);
 
-  const fromDate = body.from ? new Date(body.from) : defaultFrom;
-  const toDate = body.to ? new Date(body.to) : now;
+  const fromDate = body.from ? new Date(body.from as string) : defaultFrom;
+  const toDate = body.to ? new Date(body.to as string) : now;
 
   if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
     return NextResponse.json(
@@ -135,7 +139,7 @@ export async function POST(req: NextRequest) {
 
   const configId = await getOrCreateDefaultConfig();
   const jobId = await createScanJob(configId, {
-    sessionIdHash,
+    initiatorUserId: user.userId,
     fromDate,
     toDate,
     concurrency,
@@ -143,11 +147,20 @@ export async function POST(req: NextRequest) {
     requestedSymbols: symbols && symbols.length > 0 ? symbols : undefined,
   });
 
-  const batch = await processScanBatch({
-    jobId,
-    sessionIdHash,
-    session,
-  });
+  let batch;
+  try {
+    batch = await processScanBatch({
+      jobId,
+      userId: user.userId,
+      sessionIdHash,
+      session,
+    });
+  } catch (err) {
+    if (err instanceof MarketDataUnavailableError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 503 });
+    }
+    throw err;
+  }
 
   const job = await getScanJob(jobId);
   return NextResponse.json({

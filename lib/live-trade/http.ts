@@ -1,9 +1,9 @@
 /**
  * Shared HTTP concerns for the Live Trade API.
  *
- * Every route resolves the owner from the server-side Kite session and maps
- * failures through one handler, so authentication, origin checks and error
- * shapes cannot drift between endpoints.
+ * Every route resolves the owner from the authenticated DemandScan app session
+ * and maps failures through one handler, so authentication, origin checks and
+ * error shapes cannot drift between endpoints.
  *
  * Mutation protection is an Origin allow-list, not CORS: the browser sends
  * `Origin` on every non-GET request and scripts on another site cannot forge

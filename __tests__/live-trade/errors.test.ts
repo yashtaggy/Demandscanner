@@ -40,7 +40,7 @@ describe("LiveTradeError", () => {
 
   it("uses the default message for the code", () => {
     const error = new LiveTradeError("UNAUTHENTICATED");
-    expect(error.message).toBe("Authentication required.");
+    expect(error.message).toBe("Sign in to DemandScan to use Live Trade.");
   });
 
   it("allows an explicit message", () => {

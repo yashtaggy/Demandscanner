@@ -50,15 +50,18 @@ export function WorkspaceHeader({
     quotesRefreshing ||
     quotesLoading ||
     cooldownSecondsLeft > 0 ||
-    displayState === "sign-in";
+    displayState === "sign-in" ||
+    displayState === "broker";
 
   const refreshLabel = quotesRefreshing || quotesLoading
     ? "Refreshing…"
     : cooldownSecondsLeft > 0
       ? `Retry in ${cooldownSecondsLeft}s`
       : displayState === "sign-in"
-        ? "Reconnect to refresh"
-        : "Refresh quotes";
+        ? "Sign in to refresh"
+        : displayState === "broker"
+          ? "Connect Kite to refresh"
+          : "Refresh quotes";
 
   return (
     <section
@@ -161,6 +164,9 @@ export function WorkspaceHeader({
             )}
             {displayState === "sign-in" && (
               <Badge variant="warning">Sign in required</Badge>
+            )}
+            {displayState === "broker" && (
+              <Badge variant="warning">Kite connection required</Badge>
             )}
           </div>
 

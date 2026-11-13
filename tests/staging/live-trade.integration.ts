@@ -15,12 +15,20 @@ jest.mock("@/lib/kite-client", () => ({
   }),
 }));
 
+// App authentication is substituted with a cookie-scoped identity: this suite
+// verifies Live Trade behaviour and ownership isolation, not Firebase itself.
+jest.mock("@/lib/auth/session", () => ({
+  requireAppUser: jest.fn(),
+}));
+
 import { randomUUID } from "crypto";
 import { NextRequest } from "next/server";
 import type { KiteSession, QuoteData } from "@/lib/types";
 import { getQuotes } from "@/lib/kite-client";
+import { requireAppUser } from "@/lib/auth/session";
+import { AppAuthError, type AppUser } from "@/lib/auth/types";
 import type { LiveTradeOwnerId } from "@/lib/live-trade/types";
-import { sessionStore } from "@/lib/kite-session";
+import { bindSessionToAppUser, sessionStore } from "@/lib/kite-session";
 import * as repository from "@/lib/live-trade/repository";
 import * as service from "@/lib/live-trade/service";
 import type { QuoteProvider } from "@/lib/live-trade/quotes";
@@ -39,12 +47,18 @@ import { GET as getQuotesRoute } from "@/app/api/live-trade/quotes/route";
 import { GET as getZonesRoute } from "@/app/api/live-trade/zones/route";
 
 const APP_ORIGIN = "http://localhost:3000";
+const APP_SESSION_COOKIE = "ds_app_session=zztest-app-session";
 const NOW = new Date("2026-11-07T06:00:00.000Z");
 const getQuotesMock = getQuotes as jest.Mock;
+const requireAppUserMock = requireAppUser as jest.Mock;
 
 let run: StagingRun;
 let sessionId: string;
 let session: KiteSession;
+
+function authedCookie(): string {
+  return `${APP_SESSION_COOKIE}; ds_sid=${sessionId}`;
+}
 
 function apiRequest(
   path: string,
@@ -117,18 +131,34 @@ async function createItem(
 
 beforeAll(async () => {
   run = createStagingRun();
+
+  const appUser: AppUser = {
+    userId: run.ownerB as string,
+    email: `${run.runId}@zztest.example`,
+    displayName: "ZZTEST Staging User",
+    status: "ACTIVE",
+    role: "CUSTOMER",
+  };
+  requireAppUserMock.mockImplementation(async (cookieHeader: string | null) => {
+    if (!cookieHeader || !cookieHeader.includes(APP_SESSION_COOKIE)) {
+      throw new AppAuthError("UNAUTHENTICATED");
+    }
+    return appUser;
+  });
+
   await run.seedBase();
 
   sessionId = `zztest-session-${randomUUID()}`;
   session = {
     accessToken: "zztest-access-token",
-    userId: run.ownerB,
+    userId: run.kiteUserIdB,
     userName: "ZZTEST Staging User",
     email: "zztest@example.test",
     loginTime: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
   };
   await sessionStore.set(sessionId, session);
+  await bindSessionToAppUser(sessionId, run.ownerB);
 
   // Board fixture for coverage, zones, quotes and API tests (owner B).
   await createItem(run.ownerB, run.instrumentIds.active, { timeframe: null });
@@ -447,8 +477,8 @@ describe("API authentication and error contracts", () => {
     expect(response.status).toBe(401);
   });
 
-  it("authenticates with a real session and enforces duplicate names", async () => {
-    const cookie = `ds_sid=${sessionId}`;
+  it("authenticates with a bound app session and enforces duplicate names", async () => {
+    const cookie = authedCookie();
     const listed = await getGroupsRoute(
       apiRequest("/api/live-trade/groups", { cookie })
     );
@@ -479,7 +509,7 @@ describe("API authentication and error contracts", () => {
   });
 
   it("rejects malformed identifiers with 400 before database work", async () => {
-    const cookie = `ds_sid=${sessionId}`;
+    const cookie = authedCookie();
 
     const patch = await patchGroupRoute(
       apiRequest("/api/live-trade/groups/not-a-uuid", {
@@ -505,7 +535,7 @@ describe("API authentication and error contracts", () => {
   });
 
   it("maps a rejected cooldown claim to 429 with Retry-After", async () => {
-    const cookie = `ds_sid=${sessionId}`;
+    const cookie = authedCookie();
     await clearCooldown(run.ownerB);
     const claim = await repository.claimQuoteCooldown(run.ownerB);
     expect(claim.allowed).toBe(true);
@@ -520,7 +550,7 @@ describe("API authentication and error contracts", () => {
   });
 
   it("serves the board and validates expanded-zone requirements", async () => {
-    const cookie = `ds_sid=${sessionId}`;
+    const cookie = authedCookie();
 
     const board = await getBoardRoute(
       apiRequest("/api/live-trade/board", { cookie })

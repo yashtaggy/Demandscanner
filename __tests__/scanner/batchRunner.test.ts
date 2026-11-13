@@ -18,6 +18,7 @@ function makeJob(overrides: Partial<ScanJobRow> = {}): ScanJobRow {
     progress_percent: 0,
     error_message: null,
     config_id: 'cfg-1',
+    initiator_user_id: null,
     session_id_hash: 'hash:sid',
     from_date: new Date('2024-10-01'),
     to_date: new Date('2024-10-15'),
@@ -48,15 +49,18 @@ const session: KiteSession = {
 class MemoryStore implements ScanJobStore {
   jobs = new Map<string, ScanJobRow>();
   batches: Array<{ id: string; status: string; error?: string }> = [];
-  persistCalls: any[] = [];
+  persistCalls: Array<Parameters<ScanJobStore['persist']>[0]> = [];
   claimCalls = 0;
+  claimArgs: Array<Record<string, unknown>> = [];
 
   constructor(job: ScanJobRow) {
     this.jobs.set(job.job_id, { ...job });
   }
 
-  claim: ScanJobStore['claim'] = async ({ jobId, sessionIdHash, leaseOwner }) => {
+  claim: ScanJobStore['claim'] = async (opts) => {
     this.claimCalls += 1;
+    this.claimArgs.push(opts);
+    const { jobId, sessionIdHash, userId, leaseOwner } = opts;
     const job = jobId
       ? this.jobs.get(jobId)
       : [...this.jobs.values()].find(
@@ -66,7 +70,9 @@ class MemoryStore implements ScanJobStore {
         );
     if (!job) return null;
     if (job.status !== 'PENDING' && job.status !== 'RUNNING') return null;
-    if (sessionIdHash && job.session_id_hash && job.session_id_hash !== sessionIdHash) {
+    if (job.initiator_user_id) {
+      if (job.initiator_user_id !== userId) return null;
+    } else if (sessionIdHash && job.session_id_hash && job.session_id_hash !== sessionIdHash) {
       return null;
     }
     const leaseExpiry = job.lease_expires_at ? new Date(job.lease_expires_at) : null;
@@ -282,9 +288,9 @@ describe('processScanBatch', () => {
   });
 
   test('surfaces the underlying 42P01 missing-relation error from INGEST_HOURLY (the production failure)', async () => {
-    const missingRelation: any = new Error(
+    const missingRelation = new Error(
       'relation "hourly_ingestion_checkpoints" does not exist'
-    );
+    ) as Error & { code?: string };
     missingRelation.code = '42P01';
     const store = new MemoryStore(
       makeJob({ current_stage: 'INGEST_HOURLY', retry_count: 2, max_retries: 3 })
@@ -324,7 +330,9 @@ describe('processScanBatch', () => {
     const store = new MemoryStore(
       makeJob({ current_stage: 'INGEST_DAILY', retry_count: 0, max_retries: 5 })
     );
-    const missing: any = new Error('relation "daily_candles" does not exist');
+    const missing = new Error('relation "daily_candles" does not exist') as Error & {
+      code?: string;
+    };
     missing.code = '42P01';
     const workers = makeWorkers({
       ingestDaily: jest.fn(async () => {
@@ -379,7 +387,11 @@ describe('processScanBatch', () => {
 
     const firstClaim = store.claim({ jobId: 'job-1', leaseOwner: 'w1' });
     await firstClaim;
-    const second = await processScanBatch({ jobId: 'job-1', session }, store, workers);
+    const second = await processScanBatch(
+      { jobId: 'job-1', sessionIdHash: 'hash:sid', session },
+      store,
+      workers
+    );
     expect(second.claimed).toBe(false);
     expect(second.moreRemaining).toBe(true);
     expect(second.status).toBe('RUNNING');
@@ -494,10 +506,10 @@ describe('processScanBatch', () => {
     const store = new MemoryStore(makeJob({ current_stage: 'INGEST_DAILY', instrument_ids: [101] }));
     let attempts = 0;
     const workers = makeWorkers({
-      ingestDaily: jest.fn(async (_s, id) => {
+      ingestDaily: jest.fn(async () => {
         attempts += 1;
         if (attempts === 1) throw new Error('temporary');
-        return 1 as any;
+        return 1;
       }),
     });
 
@@ -791,5 +803,37 @@ describe('processScanBatch', () => {
     expect(warning).toContain('102');
     warnSpy.mockRestore();
     infoSpy.mockRestore();
+  });
+});
+
+
+describe('Phase 2 app-user ownership', () => {
+  test('threads the internal user id into the job claim', async () => {
+    const job = makeJob({ initiator_user_id: 'user-1', session_id_hash: null });
+    const store = new MemoryStore(job);
+
+    const result = await processScanBatch(
+      { jobId: job.job_id, userId: 'user-1' },
+      store,
+      makeWorkers()
+    );
+
+    expect(result.claimed).toBe(true);
+    expect(store.claimArgs[0]).toMatchObject({ userId: 'user-1' });
+  });
+
+  test('does not report an app-owned job to a different user', async () => {
+    const job = makeJob({ initiator_user_id: 'user-1', session_id_hash: null });
+    const store = new MemoryStore(job);
+
+    const result = await processScanBatch(
+      { jobId: job.job_id, userId: 'user-2' },
+      store,
+      makeWorkers()
+    );
+
+    expect(result.claimed).toBe(false);
+    expect(result.job).toBeNull();
+    expect(result.moreRemaining).toBe(false);
   });
 });

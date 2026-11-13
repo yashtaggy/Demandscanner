@@ -12,7 +12,7 @@ const DEFAULT_INTERVAL_MS = 30_000;
 const MIN_SERVER_COOLDOWN_MS = 5_000;
 const LOCAL_SUCCESS_COOLDOWN_MS = 5_000;
 
-export type QuoteDisplayState = "current" | "stale" | "sign-in";
+export type QuoteDisplayState = "current" | "stale" | "sign-in" | "broker";
 
 export interface QuoteMarketSnapshot {
   isOpen: boolean;
@@ -43,7 +43,8 @@ export interface UseLiveTradeQuotesReturn {
  *  - no request within the server's 5-second floor;
  *  - timers stop while the document is hidden and on unmount;
  *  - a 429 honours Retry-After and only retries on the next regular poll;
- *  - a 401 stops automatic polling and labels retained data "sign in required";
+ *  - a 401/409 that means the app session or Kite connection is unusable stops
+ *    automatic polling and labels retained data accordingly;
  *  - any other failure retains the previous snapshot as STALE without touching
  *    board data.
  */
@@ -185,7 +186,13 @@ export function useLiveTradeQuotes(
         setError(clientError);
 
         if (clientError.status === 401) {
-          setDisplayState("sign-in");
+          // TOKEN_EXPIRED is broker connectivity; every other 401 is app auth.
+          setDisplayState(
+            clientError.code === "TOKEN_EXPIRED" ? "broker" : "sign-in"
+          );
+          nextDelay = -1;
+        } else if (clientError.code === "BROKER_NOT_CONNECTED") {
+          setDisplayState("broker");
           nextDelay = -1;
         } else if (fetchedAtRef.current !== null) {
           setDisplayState("stale");
