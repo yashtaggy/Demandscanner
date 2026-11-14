@@ -22,6 +22,7 @@ import {
   requireAdmin,
   requireAppUser,
   requireAppUserSession,
+  requireCustomer,
   requireSuperAdmin,
 } from '@/lib/auth/session';
 import { AppAuthError } from '@/lib/auth/types';
@@ -144,6 +145,32 @@ describe('role guards', () => {
       role: 'SUPER_ADMIN',
     });
   });
+
+  test('requireCustomer admits an active customer', async () => {
+    mockSql.mockResolvedValue([CUSTOMER_ROW]);
+    await expect(requireCustomer(cookie())).resolves.toMatchObject({
+      userId: CUSTOMER_ROW.user_id,
+      role: 'CUSTOMER',
+    });
+  });
+
+  test.each(['ADMIN', 'SUPER_ADMIN'])(
+    'requireCustomer denies a %s account',
+    async (role) => {
+      mockSql.mockResolvedValue([{ ...CUSTOMER_ROW, role }]);
+      await expect(requireCustomer(cookie())).rejects.toMatchObject({
+        reason: 'FORBIDDEN',
+      });
+    }
+  );
+
+  test.each(['SUSPENDED', 'DISABLED'])(
+    'requireCustomer blocks a %s customer before the role check',
+    async (status) => {
+      mockSql.mockResolvedValue([{ ...CUSTOMER_ROW, status }]);
+      await expect(requireCustomer(cookie())).rejects.toMatchObject({ reason: status });
+    }
+  );
 });
 
 describe('findAppUserByFirebaseUid', () => {

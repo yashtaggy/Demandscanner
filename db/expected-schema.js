@@ -6,10 +6,24 @@
  *   - db/verify-schema.js   (read-only check against a live database)
  *   - __tests__/scanner/schema.test.ts (asserts the repo migrations actually
  *     create everything the code expects)
+ *   - db/migrate-phase5a.js (only the Phase 5A subset, see below)
  *
  * Every entry here MUST be backed by a CREATE TABLE / ALTER TABLE statement in
  * db/schema.sql or db/migrations/*.sql. The test suite enforces that.
+ *
+ * Phase ownership:
+ *   Phase 5A initializes every table except the ones listed in
+ *   POST_PHASE5A_TABLES. Its final verification uses PHASE5A_EXPECTED_SCHEMA,
+ *   so a Phase 5A-only database is valid without later-phase tables. The full
+ *   EXPECTED_SCHEMA (consumed by db:verify and the Signals runner) still
+ *   requires every table, including Signals.
  */
+
+const POST_PHASE5A_TABLES = [
+  'signals',
+  'signal_recipients',
+  'signal_email_attempts',
+];
 
 const EXPECTED_SCHEMA = {
   // db/schema.sql
@@ -366,6 +380,53 @@ const EXPECTED_SCHEMA = {
     'recorded_by',
     'created_at',
   ],
+
+  // 2026-11-14-add-signals.sql (+ 2026-11-15 fingerprint migration)
+  signals: [
+    'signal_id',
+    'message',
+    'created_by',
+    'created_at',
+    'published_at',
+    'status',
+    'idempotency_key',
+    'idempotency_fingerprint',
+  ],
+  signal_recipients: [
+    'recipient_id',
+    'signal_id',
+    'user_id',
+    'email_address',
+    'read_at',
+    'email_status',
+    'email_attempts',
+    'email_next_attempt_at',
+    'email_last_attempt_at',
+    'email_sent_at',
+    'email_error',
+    'email_lease_owner',
+    'email_lease_expires_at',
+    'created_at',
+  ],
+  signal_email_attempts: [
+    'attempt_id',
+    'recipient_id',
+    'attempted_at',
+    'outcome',
+    'error_code',
+    'error_message',
+  ],
 };
 
-module.exports = { EXPECTED_SCHEMA };
+// Phase 5A owns every table except the post-Phase-5A additions above.
+const PHASE5A_EXPECTED_SCHEMA = Object.fromEntries(
+  Object.entries(EXPECTED_SCHEMA).filter(
+    ([table]) => !POST_PHASE5A_TABLES.includes(table)
+  )
+);
+
+module.exports = {
+  EXPECTED_SCHEMA,
+  PHASE5A_EXPECTED_SCHEMA,
+  POST_PHASE5A_TABLES,
+};

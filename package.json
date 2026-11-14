@@ -29,7 +29,8 @@
     "dev:staging": "node scripts/run-with-staging-env.js dev",
     "start:staging": "node scripts/run-with-staging-env.js start",
     "test:staging": "jest --config jest.staging.config.json --runInBand",
-    "db:phase5a:init": "node db/migrate-phase5a.js"
+    "db:phase5a:init": "node db/migrate-phase5a.js",
+    "db:signals:init": "node db/migrate-signals.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
@@ -48,6 +49,7 @@
     "luxon": "^3.4.0",
     "next": "16.4.0",
     "next-auth": "^5.0.0-beta.32",
+    "nodemailer": "^8.0.11",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "tailwind-merge": "^3.7.0",
@@ -59,6 +61,7 @@
     "@testing-library/react": "^16.3.3",
     "@types/jest": "^30.0.0",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^10.0.0",

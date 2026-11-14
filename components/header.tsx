@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { useAppAuth } from "@/hooks/use-app-auth";
+import { UnreadNavBadge } from "@/components/signals/unread-nav-badge";
+import { isNavItemActive, navigationItems } from "@/lib/navigation";
 import { formatDateTime } from "@/lib/utils";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -57,14 +59,17 @@ export function Header({ lastRefreshed }: { lastRefreshed: string | null }) {
           </div>
 
           {/* Nav links */}
-          <nav className="hidden md:flex items-center gap-1">
-            <NavLink href="/" active={pathname === "/"}>Dashboard</NavLink>
-            <NavLink href="/scanner" active={pathname === "/scanner"}>Scanner</NavLink>
-            <NavLink href="/live-trade" active={pathname === "/live-trade"}>Live Trade</NavLink>
-            <NavLink href="/account/subscription" active={pathname === "/account/subscription"}>Subscription</NavLink>
-            {appUser && appUser.role !== "CUSTOMER" && (
-              <NavLink href="/admin/customers" active={pathname.startsWith("/admin")}>Admin</NavLink>
-            )}
+          <nav className="hidden md:flex min-w-0 items-center gap-1 overflow-x-auto">
+            {navigationItems(appUser?.role).map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                active={isNavItemActive(item.href, pathname)}
+              >
+                {item.label}
+                {item.badge === "unread-signals" && <UnreadNavBadge />}
+              </NavLink>
+            ))}
           </nav>
 
           {/* Center status row */}
@@ -144,13 +149,16 @@ export function Header({ lastRefreshed }: { lastRefreshed: string | null }) {
           className="flex items-center gap-1 overflow-x-auto pb-2 md:hidden"
           aria-label="Primary"
         >
-          <NavLink href="/" active={pathname === "/"}>Dashboard</NavLink>
-          <NavLink href="/scanner" active={pathname === "/scanner"}>Scanner</NavLink>
-          <NavLink href="/live-trade" active={pathname === "/live-trade"}>Live Trade</NavLink>
-          <NavLink href="/account/subscription" active={pathname === "/account/subscription"}>Subscription</NavLink>
-          {appUser && appUser.role !== "CUSTOMER" && (
-            <NavLink href="/admin/customers" active={pathname.startsWith("/admin")}>Admin</NavLink>
-          )}
+          {navigationItems(appUser?.role).map((item) => (
+            <NavLink
+              key={item.href}
+              href={item.href}
+              active={isNavItemActive(item.href, pathname)}
+            >
+              {item.label}
+              {item.badge === "unread-signals" && <UnreadNavBadge />}
+            </NavLink>
+          ))}
         </nav>
       </div>
     </header>
@@ -161,7 +169,7 @@ function NavLink({ href, active, children }: { href: string; active: boolean; ch
   return (
     <Link
       href={href}
-      className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
+      className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-md font-medium transition-colors ${
         active
           ? "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30"
           : "text-slate-400 hover:text-slate-200 hover:bg-slate-700/50"

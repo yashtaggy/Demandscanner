@@ -2,10 +2,11 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /**
-   * firebase-admin must stay outside the client/server bundle graph: it pulls in
-   * Node built-ins and reads service-account credentials at runtime.
+   * firebase-admin and nodemailer must stay outside the client/server bundle
+   * graph: they pull in Node built-ins, and both read server-side credentials
+   * at runtime.
    */
-  serverExternalPackages: ["firebase-admin"],
+  serverExternalPackages: ["firebase-admin", "nodemailer"],
   /**
    * cacheComponents is disabled to allow route segment config (runtime, dynamic)
    * on API routes. These are required for Node.js server-side Kite Connect integration.

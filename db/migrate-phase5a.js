@@ -24,8 +24,11 @@
  *     GRANT/REVOKE/COPY) and any statement outside the reviewed DDL shapes.
  *   * Prints each migration filename before applying it, records success or
  *     failure per file, and stops at the first failing statement.
- *   * Verifies the expected schema (tables, columns, foreign keys, indexes,
- *     constraints, the entitlement function) after execution.
+ *   * Verifies every Phase 5A-owned table, column, foreign key, index and
+ *     constraint. Tables added by later phases (Signals) are tolerated: they
+ *     are neither required nor treated as unexpected, because Phase 5A does
+ *     not own them. The full contract remains in db/expected-schema.js and is
+ *     still enforced by db:verify and the Signals runner.
  *
  * Usage:
  *   PHASE5A_ENV_FILE=.env.local \
@@ -39,7 +42,7 @@ const path = require('path');
 const dotenv = require('dotenv');
 const { describeTarget } = require('./target');
 const { splitStatements } = require('./sql-statements');
-const { EXPECTED_SCHEMA } = require('./expected-schema');
+const { EXPECTED_SCHEMA, PHASE5A_EXPECTED_SCHEMA } = require('./expected-schema');
 
 const AUTHORIZED_HOST = 'ep-quiet-resonance-bdscyunv.c-8.us-east-2.aws.neon.tech';
 const AUTHORIZED_DATABASE = 'neondb';
@@ -302,7 +305,7 @@ async function resolveStartIndex(sql) {
     start += 1;
   }
 
-  const expectedTables = new Set(Object.keys(EXPECTED_SCHEMA));
+  const knownTables = new Set(Object.keys(EXPECTED_SCHEMA));
   const tables = await sql.query(
     `SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`,
@@ -310,7 +313,7 @@ async function resolveStartIndex(sql) {
   );
   const unexpected = tables
     .map((row) => row.table_name)
-    .filter((name) => !expectedTables.has(name));
+    .filter((name) => !knownTables.has(name));
   if (unexpected.length > 0) {
     fail(`Unexpected tables in public schema: ${unexpected.join(', ')}.`);
   }
@@ -361,7 +364,10 @@ function loadStatements(step) {
 }
 
 async function verifySchemaAndStructure(sql) {
-  const expectedTables = Object.keys(EXPECTED_SCHEMA).sort();
+  // Phase 5A only owns the pre-Signals contract. Later-phase tables are known
+  // (so they are not "unexpected") but are not required here.
+  const ownedTables = Object.keys(PHASE5A_EXPECTED_SCHEMA).sort();
+  const knownTables = Object.keys(EXPECTED_SCHEMA).sort();
 
   const tableRows = await sql.query(
     `SELECT table_name FROM information_schema.tables
@@ -370,16 +376,18 @@ async function verifySchemaAndStructure(sql) {
     []
   );
   const actualTables = tableRows.map((row) => row.table_name);
-  const unexpected = actualTables.filter((name) => !expectedTables.includes(name));
-  const missing = expectedTables.filter((name) => !actualTables.includes(name));
+  const unexpected = actualTables.filter((name) => !knownTables.includes(name));
+  const missing = ownedTables.filter((name) => !actualTables.includes(name));
   if (missing.length > 0) fail(`Missing tables: ${missing.join(', ')}.`);
   if (unexpected.length > 0) fail(`Unexpected tables: ${unexpected.join(', ')}.`);
-  console.log(`ok  tables (${actualTables.length} expected tables present, none extra)`);
+  console.log(
+    `ok  tables (${ownedTables.length} Phase 5A tables present, none unexpected)`
+  );
 
   const columnRows = await sql.query(
     `SELECT table_name, column_name FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = ANY($1::text[])`,
-    [expectedTables]
+    [ownedTables]
   );
   const byTable = new Map();
   for (const row of columnRows) {
@@ -387,7 +395,7 @@ async function verifySchemaAndStructure(sql) {
     byTable.get(row.table_name).add(row.column_name);
   }
   let columnCount = 0;
-  for (const [table, columns] of Object.entries(EXPECTED_SCHEMA)) {
+  for (const [table, columns] of Object.entries(PHASE5A_EXPECTED_SCHEMA)) {
     const have = byTable.get(table) || new Set();
     const absent = columns.filter((column) => !have.has(column));
     if (absent.length > 0) {

@@ -123,6 +123,17 @@ export async function requireAdmin(
   return assertRole(user, ["ADMIN", "SUPER_ADMIN"]);
 }
 
+/**
+ * Customer-only gate for customer-facing APIs. Admins are deliberately rejected:
+ * staff accounts must never reach customer data through a customer endpoint.
+ */
+export async function requireCustomer(
+  cookieHeader: string | null | undefined
+): Promise<AppUser> {
+  const user = await requireAppUser(cookieHeader);
+  return assertRole(user, ["CUSTOMER"]);
+}
+
 export async function requireSuperAdmin(
   cookieHeader: string | null | undefined
 ): Promise<AppUser> {
