@@ -66,8 +66,7 @@ export function SignalHistory() {
             Signal history
           </h2>
           <p className="text-xs text-slate-500">
-            Newest first. Delivery counts come from stored recipient records; no
-            email dispatcher runs in this phase.
+            Newest first. Delivery counts come from stored recipient records.
           </p>
         </div>
         <Button

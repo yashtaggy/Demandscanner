@@ -21,11 +21,16 @@ jest.mock("@/lib/signals/service", () => ({
   signalHistory: jest.fn(),
 }));
 
+jest.mock("@/lib/signals/immediate-dispatch", () => ({
+  dispatchPublishedSignal: jest.fn(),
+}));
+
 import { NextRequest } from "next/server";
 import { requireSuperAdmin } from "@/lib/auth/session";
 import { consumeRateLimit } from "@/lib/auth/rate-limit";
 import { AppAuthError } from "@/lib/auth/types";
 import * as service from "@/lib/signals/service";
+import { dispatchPublishedSignal } from "@/lib/signals/immediate-dispatch";
 import { SignalsError } from "@/lib/signals/errors";
 
 import { GET as eligibleGet } from "@/app/api/admin/signals/eligible-recipients/route";
@@ -34,6 +39,7 @@ import { GET as detailGet } from "@/app/api/admin/signals/[signalId]/route";
 import { POST as retryPost } from "@/app/api/admin/signals/[signalId]/retry/route";
 
 const mockedService = service as jest.Mocked<typeof service>;
+const mockedDispatch = jest.mocked(dispatchPublishedSignal);
 const mockedAuth = jest.mocked(requireSuperAdmin);
 const mockedLimit = jest.mocked(consumeRateLimit);
 
@@ -55,6 +61,15 @@ const PUBLICATION = {
   status: "PUBLISHED" as const,
   recipientCount: 2,
   reused: false,
+};
+
+const DELIVERY = {
+  attempted: 2,
+  sent: 2,
+  failed: 0,
+  skipped: 0,
+  pending: 0,
+  status: "DISPATCHED" as const,
 };
 
 function request(
@@ -98,6 +113,7 @@ beforeEach(() => {
   jest.spyOn(console, "error").mockImplementation(() => {});
   mockedAuth.mockResolvedValue(SUPER_ADMIN);
   mockedLimit.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
+  mockedDispatch.mockResolvedValue(DELIVERY);
 });
 
 afterEach(() => {
@@ -224,8 +240,36 @@ describe("publication endpoint", () => {
     );
     expect(res.status).toBe(201);
     expect(res.headers.get("cache-control")).toMatch(/no-store/i);
-    await expect(res.json()).resolves.toEqual({ ok: true, signal: PUBLICATION });
+    await expect(res.json()).resolves.toEqual({
+      ok: true,
+      signal: PUBLICATION,
+      delivery: DELIVERY,
+    });
     expect(mockedService.publishSignal).toHaveBeenCalledWith(SUPER_ADMIN, body);
+  });
+
+  it("dispatches once for the signal it just published", async () => {
+    mockedService.publishSignal.mockResolvedValue(PUBLICATION);
+    await publishPost(request("/api/admin/signals", { method: "POST", body }));
+    expect(mockedDispatch).toHaveBeenCalledTimes(1);
+    expect(mockedDispatch).toHaveBeenCalledWith(PUBLICATION.signalId);
+  });
+
+  it("does not dispatch again for an idempotent replay", async () => {
+    mockedService.publishSignal.mockResolvedValue({
+      ...PUBLICATION,
+      reused: true,
+    });
+    const res = await publishPost(
+      request("/api/admin/signals", { method: "POST", body })
+    );
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      ok: true,
+      signal: { ...PUBLICATION, reused: true },
+      delivery: null,
+    });
+    expect(mockedDispatch).not.toHaveBeenCalled();
   });
 
   it("returns 200 when an idempotency key replays a publication", async () => {

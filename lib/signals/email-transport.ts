@@ -19,6 +19,22 @@ export interface SignalsEmailTransport {
   close?: () => void;
 }
 
+export const SMTP_CONNECTION_TIMEOUT_MS = 10_000;
+export const SMTP_GREETING_TIMEOUT_MS = 10_000;
+export const SMTP_SOCKET_TIMEOUT_MS = 15_000;
+
+/**
+ * Configured upper bound for one sendMail attempt: connection, greeting and a
+ * socket inactivity window. `socketTimeout` measures inactivity rather than
+ * total time, so this is the bound the options impose, not a guarantee against
+ * a server that keeps trickling bytes. Callers use it to decide whether a new
+ * attempt can still finish inside the invocation.
+ */
+export const SMTP_ATTEMPT_TIMEOUT_MS =
+  SMTP_CONNECTION_TIMEOUT_MS +
+  SMTP_GREETING_TIMEOUT_MS +
+  SMTP_SOCKET_TIMEOUT_MS;
+
 export interface SanitizedEmailError {
   /** Stored in signal_email_attempts.error_code (max 80 characters). */
   code: string;
@@ -52,9 +68,9 @@ export function createSignalsEmailTransport(
       user: config.user,
       pass: config.password,
     },
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 15_000,
+    connectionTimeout: SMTP_CONNECTION_TIMEOUT_MS,
+    greetingTimeout: SMTP_GREETING_TIMEOUT_MS,
+    socketTimeout: SMTP_SOCKET_TIMEOUT_MS,
     logger: false,
     debug: false,
     tls: {

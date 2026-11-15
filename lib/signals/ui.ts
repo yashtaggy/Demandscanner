@@ -9,6 +9,8 @@ import type {
   EligibleRecipient,
   SignalAudienceMode,
   SignalEmailStatus,
+  SignalPublishDelivery,
+  SignalPublishDeliveryCounts,
   SignalStatus,
 } from "./types";
 import { SIGNAL_MAX_RECIPIENTS, SIGNAL_MESSAGE_MAX_LENGTH } from "./validation";
@@ -213,4 +215,69 @@ export function signalStatusVariant(
 
 export function recipientSummaryLabel(count: number): string {
   return `${count} recipient${count === 1 ? "" : "s"}`;
+}
+
+function emailCountLabel(count: number): string {
+  return `${count} email${count === 1 ? "" : "s"}`;
+}
+
+/**
+ * Publish-result sentence. It only claims delivery that the summary proves:
+ * `sent` counts records that actually reached SENT, never attempts. A failed
+ * queue count is described as unconfirmed, never as a number, and no message
+ * says that already-sent email will be retried.
+ */
+export function publishDeliveryLabel(delivery: SignalPublishDelivery): string {
+  if (delivery.status === "EMAIL_NOT_CONFIGURED") {
+    return "Signal published. Email configuration is incomplete. Recipients remain queued.";
+  }
+  if (delivery.status === "DISPATCH_FAILED") {
+    // Delivery counts are unknown here; only rows still in the queue can be
+    // retried, so the sentence must not promise anything about sent email.
+    return "Signal published. Email delivery could not be confirmed. Any recipients still queued will be retried.";
+  }
+  if (delivery.status === "DISPATCHED_REPORTING_FAILED") {
+    return reportingFailedLabel(delivery);
+  }
+
+  if (delivery.failed > 0) {
+    return delivery.sent > 0
+      ? `Signal published. ${emailCountLabel(delivery.sent)} sent; ${delivery.failed} failed. Check delivery status.`
+      : "Signal published. Some email attempts failed. Check delivery status.";
+  }
+  if (delivery.attempted === 0) {
+    return delivery.pending > 0
+      ? "Signal published. No emails were attempted. Recipients remain queued."
+      : "Signal published.";
+  }
+  if (delivery.sent === 0) {
+    return "Signal published. No emails were sent; recipients are no longer active customers.";
+  }
+  if (delivery.pending > 0) {
+    return `Signal published. ${emailCountLabel(delivery.sent)} sent; ${delivery.pending} remain queued.`;
+  }
+  return `Signal published. Emails sent to ${recipientSummaryLabel(delivery.sent)}.`;
+}
+
+/**
+ * Delivery finished, so these counts are reliable, but the remaining queue is
+ * unknown. The sentence reports sends and failures without guessing the queue
+ * and without implying that delivered email will be sent again.
+ */
+function reportingFailedLabel(
+  delivery: SignalPublishDeliveryCounts
+): string {
+  const queue = "The remaining queue count could not be confirmed.";
+  if (delivery.failed > 0) {
+    return delivery.sent > 0
+      ? `Signal published. ${emailCountLabel(delivery.sent)} sent; ${delivery.failed} failed. ${queue}`
+      : `Signal published. Some email attempts failed. ${queue}`;
+  }
+  if (delivery.attempted === 0) {
+    return `Signal published. No emails were attempted. ${queue}`;
+  }
+  if (delivery.sent === 0) {
+    return `Signal published. No emails were sent; recipients are no longer active customers. ${queue}`;
+  }
+  return `Signal published. ${emailCountLabel(delivery.sent)} sent. ${queue}`;
 }

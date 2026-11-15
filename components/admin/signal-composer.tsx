@@ -10,6 +10,7 @@ import type {
   EligibleRecipient,
   SignalAudienceMode,
   SignalPublication,
+  SignalPublishDelivery,
 } from "@/lib/signals/types";
 import {
   RECIPIENT_PAGE_LIMIT,
@@ -20,6 +21,7 @@ import {
   countCodePoints,
   mergeRecipients,
   newIdempotencyKey,
+  publishDeliveryLabel,
   publishValidation,
   recipientSummaryLabel,
   requestFingerprint,
@@ -59,7 +61,10 @@ export function SignalComposer({ onPublished }: { onPublished: () => void }) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<SignalPublication | null>(null);
+  const [success, setSuccess] = useState<{
+    signal: SignalPublication;
+    delivery: SignalPublishDelivery | null;
+  } | null>(null);
 
   const attemptRef = useRef<IdempotencyAttempt | null>(null);
   const submittingRef = useRef(false);
@@ -179,13 +184,16 @@ export function SignalComposer({ onPublished }: { onPublished: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const data = await adminRequest<{ signal: SignalPublication }>(
-        "/api/admin/signals",
-        "POST",
-        { message, audience, idempotencyKey: attempt.key }
-      );
+      const data = await adminRequest<{
+        signal: SignalPublication;
+        delivery: SignalPublishDelivery | null;
+      }>("/api/admin/signals", "POST", {
+        message,
+        audience,
+        idempotencyKey: attempt.key,
+      });
       setConfirming(false);
-      setSuccess(data.signal);
+      setSuccess({ signal: data.signal, delivery: data.delivery ?? null });
       attemptRef.current = null;
       setMessage("");
       setSelection(new Map());
@@ -490,16 +498,22 @@ export function SignalComposer({ onPublished }: { onPublished: () => void }) {
       {success && (
         <div className="space-y-2 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4">
           <p className="text-sm font-medium text-emerald-300">
-            {success.reused ? "Already published" : "Signal published"} to{" "}
-            {recipientSummaryLabel(success.recipientCount)}.
+            {success.signal.reused
+              ? `Already published to ${recipientSummaryLabel(
+                  success.signal.recipientCount
+                )}.`
+              : success.delivery
+                ? publishDeliveryLabel(success.delivery)
+                : `Signal published to ${recipientSummaryLabel(
+                    success.signal.recipientCount
+                  )}.`}
           </p>
           <p className="text-xs text-slate-400">
-            Recipients can open it now in their Signals inbox. Email delivery
-            has not been performed.
+            Recipients can open it now in their Signals inbox.
           </p>
           <Link
             className="text-xs text-indigo-300 hover:text-indigo-200"
-            href={`/admin/signals/${success.signalId}`}
+            href={`/admin/signals/${success.signal.signalId}`}
           >
             Open signal details →
           </Link>
@@ -536,7 +550,8 @@ export function SignalComposer({ onPublished }: { onPublished: () => void }) {
           </p>
           <p className="text-[11px] text-slate-500">
             A published signal cannot be edited. Recipients see it immediately
-            in their Signals inbox; this action does not send email.
+            in their Signals inbox, and email delivery is attempted as soon as
+            you confirm.
           </p>
           <div className="flex gap-2">
             <Button size="sm" loading={busy} onClick={() => void confirmPublish()}>

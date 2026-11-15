@@ -15,8 +15,12 @@ jest.mock("@/lib/signals/delivery-repository", () => ({
 
 import type { SignalsEmailConfig } from "@/lib/signals/email-config";
 import type { SignalsEmailTransport } from "@/lib/signals/email-transport";
+import { SMTP_ATTEMPT_TIMEOUT_MS } from "@/lib/signals/email-transport";
 import * as repo from "@/lib/signals/delivery-repository";
-import { dispatchDueSignals } from "@/lib/signals/dispatcher";
+import {
+  DISPATCH_COMPLETION_RESERVE_MS,
+  dispatchDueSignals,
+} from "@/lib/signals/dispatcher";
 
 const mocked = repo as jest.Mocked<typeof repo>;
 
@@ -69,6 +73,10 @@ beforeEach(() => {
     attempts: 1,
   });
   mocked.markRecipientSkipped.mockResolvedValue(true);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe("delivery to eligible recipients", () => {
@@ -283,17 +291,61 @@ describe("bounded execution", () => {
       .spyOn(Date, "now")
       .mockReturnValueOnce(0)
       .mockReturnValue(2_000);
+    const onUnattempted = jest.fn().mockResolvedValue(undefined);
 
     const summary = await dispatchDueSignals({
       config: CONFIG,
       transport,
       owner: OWNER,
       timeBudgetMs: 1_000,
+      onUnattempted,
     });
     now.mockRestore();
 
     expect(summary).toMatchObject({ claimed: 2, deferred: 2, sent: 0 });
     expect(transport.sendMail).not.toHaveBeenCalled();
+    expect(onUnattempted).toHaveBeenCalledTimes(1);
+    expect(
+      (onUnattempted.mock.calls[0][0] as repo.ClaimedRecipient[]).map(
+        (recipient) => recipient.recipientId
+      )
+    ).toEqual([RECIPIENT_A, RECIPIENT_B]);
+  });
+
+  it("keeps the run alive when releasing unattempted claims fails", async () => {
+    mocked.claimDueRecipients.mockResolvedValue([claim()]);
+    const now = jest
+      .spyOn(Date, "now")
+      .mockReturnValueOnce(0)
+      .mockReturnValue(2_000);
+
+    const summary = await dispatchDueSignals({
+      config: CONFIG,
+      transport: transportWith(),
+      owner: OWNER,
+      timeBudgetMs: 1_000,
+      onUnattempted: () => {
+        throw new Error("release failed");
+      },
+    });
+    now.mockRestore();
+
+    expect(summary).toMatchObject({ claimed: 1, deferred: 1, sent: 0 });
+  });
+
+  it("claims only the requested signal", async () => {
+    await dispatchDueSignals({
+      config: CONFIG,
+      transport: transportWith(),
+      owner: OWNER,
+      signalId: SIGNAL_ID,
+    });
+    expect(mocked.claimDueRecipients).toHaveBeenCalledWith(
+      OWNER,
+      5,
+      90,
+      SIGNAL_ID
+    );
   });
 
   it("clamps the requested batch size", async () => {
@@ -303,7 +355,7 @@ describe("bounded execution", () => {
       owner: OWNER,
       batchSize: 50,
     });
-    expect(mocked.claimDueRecipients).toHaveBeenCalledWith(OWNER, 10, 90);
+    expect(mocked.claimDueRecipients).toHaveBeenCalledWith(OWNER, 10, 90, null);
   });
 
   it("closes the transport even when claiming fails", async () => {
@@ -314,5 +366,65 @@ describe("bounded execution", () => {
       dispatchDueSignals({ config: CONFIG, transport, owner: OWNER })
     ).rejects.toThrow("database unavailable");
     expect(transport.close).toHaveBeenCalled();
+  });
+
+  it("does not start an attempt that cannot finish before the deadline", async () => {
+    mocked.claimDueRecipients.mockResolvedValue([
+      claim(),
+      claim({ recipientId: RECIPIENT_B, userId: USER_B }),
+    ]);
+    const transport = transportWith();
+    jest.spyOn(Date, "now").mockReturnValue(10_000);
+    const onUnattempted = jest.fn().mockResolvedValue(undefined);
+
+    const summary = await dispatchDueSignals({
+      config: CONFIG,
+      transport,
+      owner: OWNER,
+      // One millisecond short of the attempt timeout plus the cleanup reserve.
+      deadlineAt:
+        10_000 + SMTP_ATTEMPT_TIMEOUT_MS + DISPATCH_COMPLETION_RESERVE_MS - 1,
+      onUnattempted,
+    });
+
+    expect(summary).toMatchObject({ claimed: 2, deferred: 2, sent: 0 });
+    expect(transport.sendMail).not.toHaveBeenCalled();
+    expect(onUnattempted).toHaveBeenCalledTimes(1);
+    expect(
+      (onUnattempted.mock.calls[0][0] as repo.ClaimedRecipient[]).map(
+        (recipient) => recipient.recipientId
+      )
+    ).toEqual([RECIPIENT_A, RECIPIENT_B]);
+  });
+
+  it("starts an attempt when the deadline still fits its full timeout", async () => {
+    mocked.claimDueRecipients.mockResolvedValue([claim()]);
+    const transport = transportWith();
+    jest.spyOn(Date, "now").mockReturnValue(10_000);
+
+    const summary = await dispatchDueSignals({
+      config: CONFIG,
+      transport,
+      owner: OWNER,
+      deadlineAt:
+        10_000 + SMTP_ATTEMPT_TIMEOUT_MS + DISPATCH_COMPLETION_RESERVE_MS,
+    });
+
+    expect(summary).toMatchObject({ claimed: 1, sent: 1, deferred: 0 });
+    expect(transport.sendMail).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the scheduled dispatcher free of a deadline gate", async () => {
+    mocked.claimDueRecipients.mockResolvedValue([claim()]);
+    const transport = transportWith();
+
+    const summary = await dispatchDueSignals({
+      config: CONFIG,
+      transport,
+      owner: OWNER,
+    });
+
+    expect(summary).toMatchObject({ claimed: 1, sent: 1, deferred: 0 });
+    expect(transport.sendMail).toHaveBeenCalledTimes(1);
   });
 });

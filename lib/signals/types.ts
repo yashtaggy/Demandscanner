@@ -46,6 +46,53 @@ export interface SignalDeliverySummary {
   skipped: number;
 }
 
+/**
+ * Outcome of the bounded email attempt made during publication.
+ *
+ * `attempted` is the number of recipients this request actually tried; `sent`
+ * counts records that reached SENT and is never reset when a later reporting
+ * step fails. `pending` is the number still queued afterwards, or `null` when
+ * the queue count could not be read — it is never guessed.
+ *
+ * DISPATCHED_REPORTING_FAILED means delivery itself finished and the counts are
+ * reliable, but the remaining queue is unknown. DISPATCH_FAILED means the
+ * dispatcher did not return, so no delivery count is known either.
+ */
+export interface SignalPublishDeliveryCounts {
+  attempted: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+}
+
+export type SignalPublishDeliveryStatus =
+  | "DISPATCHED"
+  | "DISPATCHED_REPORTING_FAILED"
+  | "EMAIL_NOT_CONFIGURED"
+  | "DISPATCH_FAILED";
+
+export type SignalPublishDelivery =
+  | (SignalPublishDeliveryCounts & {
+      status: "DISPATCHED";
+      pending: number;
+    })
+  | (SignalPublishDeliveryCounts & {
+      status: "DISPATCHED_REPORTING_FAILED";
+      pending: null;
+    })
+  | (SignalPublishDeliveryCounts & {
+      status: "EMAIL_NOT_CONFIGURED";
+      pending: number | null;
+    })
+  | {
+      status: "DISPATCH_FAILED";
+      attempted: null;
+      sent: null;
+      failed: null;
+      skipped: null;
+      pending: number | null;
+    };
+
 export interface SignalReadSummary {
   read: number;
   unread: number;

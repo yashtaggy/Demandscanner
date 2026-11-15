@@ -41,6 +41,7 @@ import {
   type SanitizedAttemptError,
 } from "./delivery-repository";
 import { retryDelaySeconds } from "./dispatch-policy";
+import { SMTP_ATTEMPT_TIMEOUT_MS } from "./email-transport";
 
 /**
  * Stops starting new sends once this much of the invocation is used. The route
@@ -48,6 +49,12 @@ import { retryDelaySeconds } from "./dispatch-policy";
  * SMTP attempt (connection, greeting and socket timeouts).
  */
 export const DISPATCH_TIME_BUDGET_MS = 25_000;
+
+/**
+ * Time kept after the last attempt allowed to start for its completion
+ * statement, the closing transport and the caller's follow-up queries.
+ */
+export const DISPATCH_COMPLETION_RESERVE_MS = 5_000;
 
 export interface DispatchSummary {
   claimed: number;
@@ -68,6 +75,25 @@ export interface DispatchOptions {
   owner?: string;
   batchSize?: number;
   timeBudgetMs?: number;
+  /**
+   * Absolute wall-clock deadline (epoch ms) for starting attempts. A send is
+   * started only when its full SMTP timeout budget plus the completion reserve
+   * still fits before this deadline, so one slow attempt cannot consume the
+   * invocation's remaining time. Omitted by the scheduled dispatcher.
+   */
+  deadlineAt?: number;
+  /**
+   * Restricts the claim to one signal. Immediate dispatch after publication
+   * sets it so a publish request only ever touches the new signal's recipients.
+   */
+  signalId?: string;
+  /**
+   * Receives claims left unattempted when the time budget runs out, so the
+   * caller can return them to PENDING instead of waiting for lease expiry.
+   */
+  onUnattempted?: (
+    recipients: readonly ClaimedRecipient[]
+  ) => Promise<void> | void;
 }
 
 function inactiveReason(
@@ -192,12 +218,31 @@ export async function dispatchDueSignals(
   };
 
   try {
-    const claims = await claimDueRecipients(owner, batchSize, DISPATCH_LEASE_SECONDS);
+    const claims = await claimDueRecipients(
+      owner,
+      batchSize,
+      DISPATCH_LEASE_SECONDS,
+      options.signalId ?? null
+    );
     summary.claimed = claims.length;
 
     for (let index = 0; index < claims.length; index += 1) {
-      if (Date.now() - startedAt >= timeBudgetMs) {
-        summary.deferred = claims.length - index;
+      const now = Date.now();
+      const budgetExhausted = now - startedAt >= timeBudgetMs;
+      const deadlineTooClose =
+        options.deadlineAt !== undefined &&
+        options.deadlineAt - now <
+          SMTP_ATTEMPT_TIMEOUT_MS + DISPATCH_COMPLETION_RESERVE_MS;
+      if (budgetExhausted || deadlineTooClose) {
+        const unattempted = claims.slice(index);
+        summary.deferred = unattempted.length;
+        if (options.onUnattempted && unattempted.length > 0) {
+          try {
+            await options.onUnattempted(unattempted);
+          } catch {
+            // The lease still protects these rows; expiry requeues them.
+          }
+        }
         break;
       }
       await deliverOne(claims[index], options, owner, summary);

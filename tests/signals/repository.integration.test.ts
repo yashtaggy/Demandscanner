@@ -37,11 +37,18 @@ import {
 } from "@/lib/signals/repository";
 import {
   claimDueRecipients,
+  countPendingRecipients,
   markRecipientFailed,
   markRecipientSent,
+  markRecipientSkipped,
+  releaseClaimedRecipients,
 } from "@/lib/signals/delivery-repository";
 import { dispatchDueSignals } from "@/lib/signals/dispatcher";
-import type { SignalsEmailConfig } from "@/lib/signals/email-config";
+import { dispatchPublishedSignal } from "@/lib/signals/immediate-dispatch";
+import type {
+  SignalsEmailConfig,
+  SignalsEmailConfigResult,
+} from "@/lib/signals/email-config";
 import type { SignalsEmailTransport } from "@/lib/signals/email-transport";
 import { retryDelaySeconds } from "@/lib/signals/dispatch-policy";
 import {
@@ -1436,6 +1443,599 @@ describeDb("Signals repository SQL (disposable PostgreSQL)", () => {
       expect(
         await count(`SELECT count(*) FROM signals WHERE signal_id = '${signalId}';`)
       ).toBe(1);
+    });
+  });
+
+  // ─── Phase S7.1: immediate dispatch production safety ────────────────────
+
+  describe("S7.1 immediate dispatch safety", () => {
+    const EMAIL_CONFIG: SignalsEmailConfig = {
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      user: "signals@example.com",
+      password: "integration-app-password",
+      fromName: "DemandScan Signals",
+      fromAddress: "signals@example.com",
+      replyTo: null,
+      footer: null,
+      appUrl: "https://app.example.com",
+    };
+
+    const configOk = (): SignalsEmailConfigResult => ({
+      ok: true,
+      config: EMAIL_CONFIG,
+    });
+
+    function fakeTransport(sent: string[] = []): SignalsEmailTransport {
+      return {
+        sendMail: async (options) => {
+          sent.push(String(options.to));
+          return { accepted: [options.to] } as never;
+        },
+        close: () => {},
+      } as SignalsEmailTransport;
+    }
+
+    function attemptsFor(signalId: string): Promise<number> {
+      return count(
+        `SELECT count(*) FROM signal_email_attempts a
+           JOIN signal_recipients r ON r.recipient_id = a.recipient_id
+          WHERE r.signal_id = '${signalId}';`
+      );
+    }
+
+    async function waitUntil(
+      check: () => Promise<boolean>,
+      label: string
+    ): Promise<void> {
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline) {
+        if (await check()) return;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      throw new Error(`Timed out waiting for ${label}`);
+    }
+
+    /**
+     * Counts row locks held on signal_recipients by OTHER backends. psql runs
+     * each repository statement on its own connection, so this only sees the
+     * separately spawned holding session.
+     */
+    function foreignRowLocks(): Promise<number> {
+      return count(
+        `SELECT count(*)
+           FROM pg_locks l
+           JOIN pg_class c ON c.oid = l.relation
+           JOIN pg_stat_activity a ON a.pid = l.pid
+          WHERE c.relname = 'signal_recipients'
+            AND l.mode = 'RowShareLock'
+            AND l.granted
+            AND a.pid <> pg_backend_pid();`
+      );
+    }
+
+    /** A second connection holding row locks in an open transaction. */
+    function holdLocks(recipientIds: readonly string[]): Promise<void> {
+      const ids = recipientIds
+        .map((id) => `'${id}'::uuid`)
+        .join(", ");
+      const text =
+        "BEGIN;\n" +
+        `SELECT recipient_id FROM signal_recipients WHERE recipient_id IN (${ids}) FOR UPDATE;\n` +
+        "SELECT pg_sleep(2.5);\n" +
+        "COMMIT;";
+      return new Promise((resolve, reject) => {
+        const child = spawn(
+          PSQL,
+          [TEST_URL, "-X", "-q", "-v", "ON_ERROR_STOP=1", "-c", text],
+          { env: { ...process.env, PGTZ: "UTC" }, windowsHide: true }
+        );
+        let stderr = "";
+        child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
+          stderr += chunk;
+        });
+        child.on("error", reject);
+        child.on("close", (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(stderr.trim() || `psql exited with code ${code}`));
+        });
+      });
+    }
+
+    // 1 ─ Two concurrent dispatchers
+    it("cannot claim the same recipient from separate connections", async () => {
+      const extra = await insertUser("s71-race-extra", "CUSTOMER", "ACTIVE");
+      const audience = { mode: "SELECTED" as const, userIds: [...recipients, extra] };
+      const { signalId } = await publish({
+        message: "Concurrent claim",
+        audience,
+        idempotencyKey: key("s71-race"),
+      });
+
+      // Three separate psql processes issue the real claim statement at once.
+      const batches = await Promise.all([
+        claimDueRecipients("race-a", 5, 90),
+        claimDueRecipients("race-b", 5, 90),
+        claimDueRecipients("race-c", 5, 90),
+      ]);
+
+      const claimed = batches.flat();
+      expect(claimed).toHaveLength(6);
+      expect(new Set(claimed.map((row) => row.recipientId)).size).toBe(6);
+      expect(claimed.every((row) => row.signalId === signalId)).toBe(true);
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE signal_id = '${signalId}'
+              AND email_status = 'SENDING'
+              AND email_lease_owner IN ('race-a', 'race-b', 'race-c')
+              AND email_lease_expires_at IS NOT NULL;`
+        )
+      ).toBe(6);
+    });
+
+    it("skips rows locked by another connection, then claims them after release", async () => {
+      const { signalId } = await publish({
+        message: "Locked rows",
+        audience: { mode: "SELECTED", userIds: [recipients[0]] },
+        idempotencyKey: key("s71-locked"),
+      });
+      const recipientId = String(
+        await scalar(
+          `SELECT recipient_id FROM signal_recipients
+            WHERE signal_id = '${signalId}';`
+        )
+      );
+
+      const holder = holdLocks([recipientId]);
+      await waitUntil(async () => (await foreignRowLocks()) > 0, "holder lock");
+
+      // The real claim statement must not block or steal the locked row.
+      expect(await claimDueRecipients("contender", 5, 90)).toHaveLength(0);
+
+      await holder;
+      await waitUntil(async () => (await foreignRowLocks()) === 0, "lock release");
+
+      expect(await claimDueRecipients("contender", 5, 90)).toHaveLength(1);
+    });
+
+    // 2, 3 ─ Immediate scope and scheduled remainder
+    it("scopes immediate dispatch to its signal and leaves overflow for the scheduler", async () => {
+      const extraA1 = await insertUser("s71-imm-a1", "CUSTOMER", "ACTIVE");
+      const extraA2 = await insertUser("s71-imm-a2", "CUSTOMER", "ACTIVE");
+      const extraB1 = await insertUser("s71-imm-b1", "CUSTOMER", "ACTIVE");
+      const extraB2 = await insertUser("s71-imm-b2", "CUSTOMER", "ACTIVE");
+
+      const signalA = await publish({
+        message: "Immediate scope A",
+        audience: {
+          mode: "SELECTED",
+          userIds: [...recipients, extraA1, extraA2],
+        },
+        idempotencyKey: key("s71-imm-a"),
+      });
+      const signalB = await publish({
+        message: "Immediate scope B",
+        audience: { mode: "SELECTED", userIds: [extraB1, extraB2] },
+        idempotencyKey: key("s71-imm-b"),
+      });
+
+      const sentA: string[] = [];
+      const delivery = await dispatchPublishedSignal(signalA.signalId, {
+        resolveConfig: configOk,
+        createTransport: () => fakeTransport(sentA),
+      });
+
+      // Batch ceiling is 5: the two remaining recipients stay queued.
+      expect(delivery).toEqual({
+        attempted: 5,
+        sent: 5,
+        failed: 0,
+        skipped: 0,
+        pending: 2,
+        status: "DISPATCHED",
+      });
+      const rowsA = await recipientsOf(signalA.signalId);
+      expect(sentA).toHaveLength(5);
+      expect(sentA.every((email) => rowsA.some((row) => row.email_address === email))).toBe(
+        true
+      );
+      expect(await attemptsFor(signalA.signalId)).toBe(5);
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE signal_id = '${signalA.signalId}'
+              AND email_status = 'SENT' AND email_attempts = 1;`
+        )
+      ).toBe(5);
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE signal_id = '${signalA.signalId}'
+              AND email_status = 'PENDING'
+              AND email_attempts = 0
+              AND email_lease_owner IS NULL
+              AND email_lease_expires_at IS NULL;`
+        )
+      ).toBe(2);
+      expect(await countPendingRecipients(signalA.signalId)).toBe(2);
+
+      // Signal B was never touched by the publish request.
+      const rowsB = await recipientsOf(signalB.signalId);
+      expect(rowsB).toHaveLength(2);
+      for (const row of rowsB) {
+        expect(row.email_status).toBe("PENDING");
+        expect(Number(row.email_attempts)).toBe(0);
+        expect(row.email_lease_owner).toBeNull();
+      }
+      expect(await attemptsFor(signalB.signalId)).toBe(0);
+
+      // The scheduled dispatcher (global claim) drains A's overflow and B.
+      const sentScheduled: string[] = [];
+      const summary = await dispatchDueSignals({
+        config: EMAIL_CONFIG,
+        transport: fakeTransport(sentScheduled),
+        owner: "scheduled-s71",
+        batchSize: 10,
+      });
+      expect(summary).toMatchObject({ claimed: 4, sent: 4, failed: 0, skipped: 0 });
+      expect(sentScheduled).toHaveLength(4);
+      expect(await countPendingRecipients(signalA.signalId)).toBe(0);
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE signal_id IN ('${signalA.signalId}', '${signalB.signalId}')
+              AND email_status = 'SENT' AND email_attempts = 1;`
+        )
+      ).toBe(9);
+    });
+
+    // 4 ─ Release unattempted claims
+    it("releases unattempted claims back to PENDING without recording an attempt", async () => {
+      const { signalId } = await publish({
+        message: "Release claims",
+        audience: { mode: "SELECTED", userIds: [recipients[0], recipients[1]] },
+        idempotencyKey: key("s71-release"),
+      });
+
+      const claims = await claimDueRecipients("release-owner", 5, 90);
+      expect(claims).toHaveLength(2);
+      const ids = claims.map((row) => row.recipientId);
+
+      // Another owner cannot release a live lease.
+      expect(await releaseClaimedRecipients(ids, "wrong-owner")).toBe(0);
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE signal_id = '${signalId}'
+              AND email_status = 'SENDING'
+              AND email_lease_owner = 'release-owner';`
+        )
+      ).toBe(2);
+
+      expect(await releaseClaimedRecipients(ids, "release-owner")).toBe(2);
+
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE signal_id = '${signalId}'
+              AND email_status = 'PENDING'
+              AND email_attempts = 0
+              AND email_lease_owner IS NULL
+              AND email_lease_expires_at IS NULL
+              AND email_last_attempt_at IS NULL
+              AND email_sent_at IS NULL
+              AND email_error IS NULL
+              AND email_next_attempt_at <= NOW();`
+        )
+      ).toBe(2);
+      expect(await attemptsFor(signalId)).toBe(0);
+      expect(await countPendingRecipients(signalId)).toBe(2);
+
+      // Released rows are immediately claimable again.
+      expect(await claimDueRecipients("release-owner-2", 5, 90)).toHaveLength(2);
+    });
+
+    // 5 ─ Stale lease owner
+    it("refuses every completion from a stale lease owner", async () => {
+      const { signalId } = await publish({
+        message: "Stale owner",
+        audience: { mode: "SELECTED", userIds: [recipients[0], recipients[1]] },
+        idempotencyKey: key("s71-stale"),
+      });
+
+      const original = await claimDueRecipients("stale-a", 5, 90);
+      expect(original).toHaveLength(2);
+      await dbQuery(
+        `UPDATE signal_recipients
+            SET email_lease_expires_at = NOW() - INTERVAL '1 minute'
+          WHERE signal_id = '${signalId}';`
+      );
+      const current = await claimDueRecipients("stale-b", 5, 90);
+      expect(current.map((row) => row.recipientId).sort()).toEqual(
+        original.map((row) => row.recipientId).sort()
+      );
+
+      const target = current[0].recipientId;
+      expect(await markRecipientSent(target, "stale-a")).toBe(false);
+      const staleFailure = await markRecipientFailed(
+        target,
+        "stale-a",
+        {
+          code: "SMTP_TIMEOUT",
+          message: "The SMTP server did not respond in time.",
+        },
+        60
+      );
+      expect(staleFailure).toEqual({ applied: false, terminal: false, attempts: 0 });
+      expect(
+        await markRecipientSkipped(target, "stale-a", {
+          code: "RECIPIENT_INACTIVE",
+          message: "The recipient account is not active.",
+        })
+      ).toBe(false);
+
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE recipient_id = '${target}'
+              AND email_status = 'SENDING'
+              AND email_lease_owner = 'stale-b'
+              AND email_attempts = 0
+              AND email_sent_at IS NULL
+              AND email_error IS NULL;`
+        )
+      ).toBe(1);
+      expect(await attemptsFor(signalId)).toBe(0);
+
+      // The current owner can complete the same row.
+      expect(await markRecipientSent(target, "stale-b")).toBe(true);
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE recipient_id = '${target}'
+              AND email_status = 'SENT'
+              AND email_attempts = 1
+              AND email_sent_at IS NOT NULL
+              AND email_lease_owner IS NULL
+              AND email_lease_expires_at IS NULL;`
+        )
+      ).toBe(1);
+      expect(await attemptsFor(signalId)).toBe(1);
+    });
+
+    // 6 ─ Database failure during dispatch
+    it("keeps a recipient recoverable when the completion statement fails", async () => {
+      const { signalId } = await publish({
+        message: "DB failure",
+        audience: { mode: "SELECTED", userIds: [recipients[0]] },
+        idempotencyKey: key("s71-db-failure"),
+      });
+      const target = String(
+        await scalar(
+          `SELECT recipient_id FROM signal_recipients
+            WHERE signal_id = '${signalId}';`
+        )
+      );
+
+      await dbQuery(
+        `CREATE OR REPLACE FUNCTION s71_block_attempt() RETURNS trigger AS $$
+         BEGIN
+           IF NEW.recipient_id = '${target}'::uuid THEN
+             RAISE EXCEPTION 'injected attempt failure';
+           END IF;
+           RETURN NEW;
+         END;
+         $$ LANGUAGE plpgsql;
+         DROP TRIGGER IF EXISTS s71_block_attempt ON signal_email_attempts;
+         CREATE TRIGGER s71_block_attempt
+           BEFORE INSERT ON signal_email_attempts
+           FOR EACH ROW EXECUTE FUNCTION s71_block_attempt();`
+      );
+
+      const firstSend: string[] = [];
+      try {
+        await expect(
+          dispatchDueSignals({
+            config: EMAIL_CONFIG,
+            transport: fakeTransport(firstSend),
+            owner: "db-fail-owner",
+          })
+        ).rejects.toThrow(/injected attempt failure/);
+      } finally {
+        await dbQuery(
+          `DROP TRIGGER IF EXISTS s71_block_attempt ON signal_email_attempts;
+           DROP FUNCTION IF EXISTS s71_block_attempt();`
+        );
+      }
+
+      // The statement rolled back as a unit: no attempt, no SENT, still leased.
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE signal_id = '${signalId}'
+              AND email_status = 'SENDING'
+              AND email_attempts = 0
+              AND email_lease_owner = 'db-fail-owner'
+              AND email_sent_at IS NULL
+              AND email_error IS NULL;`
+        )
+      ).toBe(1);
+      expect(await attemptsFor(signalId)).toBe(0);
+      // SMTP accepted the message before the database write failed.
+      expect(firstSend).toHaveLength(1);
+      expect(
+        await count(`SELECT count(*) FROM signals WHERE signal_id = '${signalId}';`)
+      ).toBe(1);
+
+      // Lease expiry lets a later dispatcher finish the row.
+      await dbQuery(
+        `UPDATE signal_recipients
+            SET email_lease_expires_at = NOW() - INTERVAL '1 minute'
+          WHERE signal_id = '${signalId}';`
+      );
+      const secondSend: string[] = [];
+      const recovered = await dispatchDueSignals({
+        config: EMAIL_CONFIG,
+        transport: fakeTransport(secondSend),
+        owner: "recovery-owner",
+      });
+      expect(recovered).toMatchObject({ claimed: 1, sent: 1, failed: 0 });
+      expect(secondSend).toHaveLength(1);
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE signal_id = '${signalId}'
+              AND email_status = 'SENT'
+              AND email_attempts = 1
+              AND email_sent_at IS NOT NULL;`
+        )
+      ).toBe(1);
+      expect(await attemptsFor(signalId)).toBe(1);
+    });
+
+    it("leaves the queue untouched when the claim statement fails", async () => {
+      const { signalId } = await publish({
+        message: "Claim failure",
+        audience: { mode: "SELECTED", userIds: [recipients[0]] },
+        idempotencyKey: key("s71-claim-failure"),
+      });
+
+      const globals = globalThis as { __signalsRepoTestSql?: unknown };
+      const original = globals.__signalsRepoTestSql;
+      expect(original).toBe(psqlTag);
+      globals.__signalsRepoTestSql = (
+        strings: TemplateStringsArray,
+        ...values: unknown[]
+      ) => {
+        if (strings.join("?").includes("FOR UPDATE SKIP LOCKED")) {
+          throw new Error("injected claim failure");
+        }
+        return psqlTag(strings, ...values);
+      };
+
+      try {
+        await expect(
+          dispatchDueSignals({
+            config: EMAIL_CONFIG,
+            transport: fakeTransport(),
+            owner: "claim-fail-owner",
+          })
+        ).rejects.toThrow(/injected claim failure/);
+      } finally {
+        globals.__signalsRepoTestSql = original;
+      }
+
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE signal_id = '${signalId}'
+              AND email_status = 'PENDING'
+              AND email_attempts = 0
+              AND email_lease_owner IS NULL
+              AND email_lease_expires_at IS NULL
+              AND email_last_attempt_at IS NULL;`
+        )
+      ).toBe(1);
+      expect(await attemptsFor(signalId)).toBe(0);
+      expect(await claimDueRecipients("after-failure", 5, 90)).toHaveLength(1);
+    });
+
+    // 7 ─ Idempotent replay
+    it("does not dispatch when an identical publication is replayed", async () => {
+      const body = {
+        message: "Replay safe",
+        audience: {
+          mode: "SELECTED" as const,
+          userIds: [recipients[0], recipients[1]],
+        },
+        idempotencyKey: key("s71-replay"),
+      };
+      const sent: string[] = [];
+      let dispatches = 0;
+
+      // Mirrors the publish route: dispatch only for a genuinely new signal.
+      async function publishLikeRoute(): Promise<string> {
+        const publication = await publish(body);
+        if (!publication.reused) {
+          dispatches += 1;
+          await dispatchPublishedSignal(publication.signalId, {
+            resolveConfig: configOk,
+            createTransport: () => fakeTransport(sent),
+          });
+        }
+        return publication.signalId;
+      }
+
+      const signalId = await publishLikeRoute();
+      expect(dispatches).toBe(1);
+      expect(sent).toHaveLength(2);
+      expect(await attemptsFor(signalId)).toBe(2);
+
+      const replayedId = await publishLikeRoute();
+      expect(replayedId).toBe(signalId);
+      expect(dispatches).toBe(1);
+      expect(sent).toHaveLength(2);
+      expect(await attemptsFor(signalId)).toBe(2);
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE signal_id = '${signalId}';`
+        )
+      ).toBe(2);
+
+      // A key reused with different content is rejected and dispatches nothing.
+      await expect(
+        publish({ ...body, message: "Replay with edits" })
+      ).rejects.toMatchObject({ status: 409, code: "IDEMPOTENCY_KEY_REUSED" });
+      expect(dispatches).toBe(1);
+      expect(sent).toHaveLength(2);
+      expect(await attemptsFor(signalId)).toBe(2);
+      expect(
+        await count(`SELECT count(*) FROM signals WHERE signal_id = '${signalId}';`)
+      ).toBe(1);
+    });
+
+    // Configuration failure must never look like delivery
+    it("reports queued recipients and creates no transport when SMTP is unconfigured", async () => {
+      const { signalId } = await publish({
+        message: "No SMTP",
+        audience: { mode: "SELECTED", userIds: [recipients[0], recipients[1]] },
+        idempotencyKey: key("s71-no-smtp"),
+      });
+
+      let transportCreated = false;
+      const delivery = await dispatchPublishedSignal(signalId, {
+        resolveConfig: () => ({
+          ok: false,
+          problems: ["SIGNALS_SMTP_HOST is missing."],
+        }),
+        createTransport: () => {
+          transportCreated = true;
+          throw new Error("transport must not be created");
+        },
+      });
+
+      expect(delivery).toEqual({
+        attempted: 0,
+        sent: 0,
+        failed: 0,
+        skipped: 0,
+        pending: 2,
+        status: "EMAIL_NOT_CONFIGURED",
+      });
+      expect(transportCreated).toBe(false);
+      expect(
+        await count(
+          `SELECT count(*) FROM signal_recipients
+            WHERE signal_id = '${signalId}'
+              AND email_status = 'PENDING'
+              AND email_attempts = 0
+              AND email_lease_owner IS NULL;`
+        )
+      ).toBe(2);
+      expect(await attemptsFor(signalId)).toBe(0);
     });
   });
 });

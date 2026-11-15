@@ -7,6 +7,7 @@ import {
   emailStatusVariant,
   mergeRecipients,
   newIdempotencyKey,
+  publishDeliveryLabel,
   publishValidation,
   recipientSummaryLabel,
   requestFingerprint,
@@ -18,7 +19,11 @@ import {
   toggleRecipient,
   unreadBadgeLabel,
 } from "@/lib/signals/ui";
-import type { CustomerSignalSummary, EligibleRecipient } from "@/lib/signals/types";
+import type {
+  CustomerSignalSummary,
+  EligibleRecipient,
+  SignalPublishDelivery,
+} from "@/lib/signals/types";
 
 const ALICE: EligibleRecipient = {
   userId: "11111111-1111-4111-8111-111111111111",
@@ -210,5 +215,194 @@ describe("display mapping", () => {
     expect(recipientSummaryLabel(1)).toBe("1 recipient");
     expect(recipientSummaryLabel(2)).toBe("2 recipients");
     expect(recipientSummaryLabel(0)).toBe("0 recipients");
+  });
+});
+
+describe("publish delivery label", () => {
+  function dispatched(
+    overrides: Partial<{
+      attempted: number;
+      sent: number;
+      failed: number;
+      skipped: number;
+      pending: number;
+    }> = {}
+  ): SignalPublishDelivery {
+    return {
+      status: "DISPATCHED",
+      attempted: overrides.attempted ?? 0,
+      sent: overrides.sent ?? 0,
+      failed: overrides.failed ?? 0,
+      skipped: overrides.skipped ?? 0,
+      pending: overrides.pending ?? 0,
+    };
+  }
+
+  function reportingFailed(
+    overrides: Partial<{
+      attempted: number;
+      sent: number;
+      failed: number;
+      skipped: number;
+    }> = {}
+  ): SignalPublishDelivery {
+    return {
+      status: "DISPATCHED_REPORTING_FAILED",
+      attempted: overrides.attempted ?? 0,
+      sent: overrides.sent ?? 0,
+      failed: overrides.failed ?? 0,
+      skipped: overrides.skipped ?? 0,
+      pending: null,
+    };
+  }
+
+  it("reports delivered email only when records reached SENT", () => {
+    expect(publishDeliveryLabel(dispatched({ attempted: 2, sent: 2 }))).toBe(
+      "Signal published. Emails sent to 2 recipients."
+    );
+    expect(publishDeliveryLabel(dispatched({ attempted: 1, sent: 1 }))).toBe(
+      "Signal published. Emails sent to 1 recipient."
+    );
+  });
+
+  it("reports remaining queued recipients", () => {
+    expect(
+      publishDeliveryLabel(dispatched({ attempted: 5, sent: 5, pending: 3 }))
+    ).toBe("Signal published. 5 emails sent; 3 remain queued.");
+    expect(
+      publishDeliveryLabel(dispatched({ attempted: 5, sent: 1, pending: 4 }))
+    ).toBe("Signal published. 1 email sent; 4 remain queued.");
+  });
+
+  it("flags failed attempts without claiming delivery", () => {
+    expect(
+      publishDeliveryLabel(dispatched({ attempted: 2, failed: 2, pending: 2 }))
+    ).toBe("Signal published. Some email attempts failed. Check delivery status.");
+    expect(
+      publishDeliveryLabel(
+        dispatched({ attempted: 3, sent: 2, failed: 1, pending: 1 })
+      )
+    ).toBe("Signal published. 2 emails sent; 1 failed. Check delivery status.");
+  });
+
+  it("explains configuration problems", () => {
+    expect(
+      publishDeliveryLabel({
+        status: "EMAIL_NOT_CONFIGURED",
+        attempted: 0,
+        sent: 0,
+        failed: 0,
+        skipped: 0,
+        pending: 2,
+      })
+    ).toBe(
+      "Signal published. Email configuration is incomplete. Recipients remain queued."
+    );
+    expect(
+      publishDeliveryLabel({
+        status: "EMAIL_NOT_CONFIGURED",
+        attempted: 0,
+        sent: 0,
+        failed: 0,
+        skipped: 0,
+        pending: null,
+      })
+    ).toBe(
+      "Signal published. Email configuration is incomplete. Recipients remain queued."
+    );
+  });
+
+  it("does not claim a send when nothing was attempted or everything was skipped", () => {
+    expect(publishDeliveryLabel(dispatched({ pending: 2 }))).toBe(
+      "Signal published. No emails were attempted. Recipients remain queued."
+    );
+    expect(publishDeliveryLabel(dispatched({ pending: 0 }))).toBe(
+      "Signal published."
+    );
+    expect(
+      publishDeliveryLabel(dispatched({ attempted: 2, skipped: 2 }))
+    ).toBe(
+      "Signal published. No emails were sent; recipients are no longer active customers."
+    );
+  });
+
+  it("distinguishes unconfirmed delivery from unconfirmed reporting", () => {
+    expect(
+      publishDeliveryLabel({
+        status: "DISPATCH_FAILED",
+        attempted: null,
+        sent: null,
+        failed: null,
+        skipped: null,
+        pending: 3,
+      })
+    ).toBe(
+      "Signal published. Email delivery could not be confirmed. Any recipients still queued will be retried."
+    );
+    expect(
+      publishDeliveryLabel({
+        status: "DISPATCH_FAILED",
+        attempted: null,
+        sent: null,
+        failed: null,
+        skipped: null,
+        pending: null,
+      })
+    ).toBe(
+      "Signal published. Email delivery could not be confirmed. Any recipients still queued will be retried."
+    );
+    expect(
+      publishDeliveryLabel(reportingFailed({ attempted: 2, sent: 2 }))
+    ).toBe(
+      "Signal published. 2 emails sent. The remaining queue count could not be confirmed."
+    );
+  });
+
+  it("keeps delivery counts visible when only reporting failed", () => {
+    expect(
+      publishDeliveryLabel(reportingFailed({ attempted: 3, sent: 2, failed: 1 }))
+    ).toBe(
+      "Signal published. 2 emails sent; 1 failed. The remaining queue count could not be confirmed."
+    );
+    expect(
+      publishDeliveryLabel(reportingFailed({ attempted: 1, failed: 1 }))
+    ).toBe(
+      "Signal published. Some email attempts failed. The remaining queue count could not be confirmed."
+    );
+    expect(publishDeliveryLabel(reportingFailed())).toBe(
+      "Signal published. No emails were attempted. The remaining queue count could not be confirmed."
+    );
+    expect(
+      publishDeliveryLabel(reportingFailed({ attempted: 2, skipped: 2 }))
+    ).toBe(
+      "Signal published. No emails were sent; recipients are no longer active customers. The remaining queue count could not be confirmed."
+    );
+  });
+
+  it("never says delivered email will be retried", () => {
+    const delivered = [
+      publishDeliveryLabel(dispatched({ attempted: 2, sent: 2 })),
+      publishDeliveryLabel(dispatched({ attempted: 5, sent: 5, pending: 3 })),
+      publishDeliveryLabel(
+        dispatched({ attempted: 3, sent: 2, failed: 1, pending: 1 })
+      ),
+      publishDeliveryLabel(reportingFailed({ attempted: 2, sent: 2 })),
+      publishDeliveryLabel(reportingFailed({ attempted: 3, sent: 2, failed: 1 })),
+    ];
+    for (const label of delivered) {
+      expect(label.toLowerCase()).not.toContain("retried");
+    }
+
+    // Unknown delivery may only promise a retry for rows still queued.
+    const unknown = publishDeliveryLabel({
+      status: "DISPATCH_FAILED",
+      attempted: null,
+      sent: null,
+      failed: null,
+      skipped: null,
+      pending: 3,
+    });
+    expect(unknown).toContain("Any recipients still queued will be retried");
+    expect(unknown.toLowerCase()).not.toMatch(/sent.*retried/);
   });
 });

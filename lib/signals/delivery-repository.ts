@@ -75,6 +75,10 @@ function sanitizeDiagnostic(value: string, maxLength: number): string {
  * recipient with a future `email_next_attempt_at` is not due and is left for a
  * later dispatch.
  *
+ * `signalId` narrows the claim to one signal. Immediate dispatch after
+ * publication uses it so a publish request can never consume another signal's
+ * queued work; the scheduled dispatcher passes nothing and claims globally.
+ *
  * The attempt ceiling gates expired SENDING leases only. Exhausted automatic
  * deliveries are FAILED, never PENDING, so a PENDING row above the ceiling can
  * only be an explicit admin requeue; it receives one more attempt and returns
@@ -83,7 +87,8 @@ function sanitizeDiagnostic(value: string, maxLength: number): string {
 export async function claimDueRecipients(
   owner: string,
   limit: number = DISPATCH_BATCH_SIZE,
-  leaseSeconds: number = DISPATCH_LEASE_SECONDS
+  leaseSeconds: number = DISPATCH_LEASE_SECONDS,
+  signalId: string | null = null
 ): Promise<ClaimedRecipient[]> {
   const sql = getDb();
 
@@ -100,6 +105,7 @@ export async function claimDueRecipients(
              AND r.email_attempts < ${SIGNAL_EMAIL_MAX_ATTEMPTS}
            )
          )
+         AND (${signalId}::uuid IS NULL OR r.signal_id = ${signalId}::uuid)
        ORDER BY r.email_next_attempt_at ASC, r.created_at ASC, r.recipient_id ASC
        FOR UPDATE SKIP LOCKED
        LIMIT ${limit}
@@ -129,6 +135,46 @@ export async function claimDueRecipients(
     priorAttempts: Number(row.email_attempts),
     message: row.message,
   }));
+}
+
+/**
+ * Released claims are returned to the queue untouched: an immediate dispatch
+ * that runs out of time must not leave rows SENDING until the lease expires,
+ * and must not record an attempt it never made. Only the dispatcher that still
+ * owns the lease can release, so a slow claimer cannot disturb live work.
+ */
+export async function releaseClaimedRecipients(
+  recipientIds: readonly string[],
+  owner: string
+): Promise<number> {
+  if (recipientIds.length === 0) return 0;
+  const sql = getDb();
+  const rows = (await sql`
+    UPDATE signal_recipients
+       SET email_status = 'PENDING',
+           email_lease_owner = NULL,
+           email_lease_expires_at = NULL,
+           email_last_attempt_at = NULL
+     WHERE recipient_id = ANY(${recipientIds}::uuid[])
+       AND email_status = 'SENDING'
+       AND email_lease_owner = ${owner}
+    RETURNING recipient_id
+  `) as { recipient_id: string }[];
+  return rows.length;
+}
+
+/** Recipients of one signal still queued for a future attempt. */
+export async function countPendingRecipients(
+  signalId: string
+): Promise<number> {
+  const sql = getDb();
+  const rows = (await sql`
+    SELECT count(*)::int AS n
+      FROM signal_recipients
+     WHERE signal_id = ${signalId}::uuid
+       AND email_status = 'PENDING'
+  `) as { n: number | string }[];
+  return Number(rows[0]?.n ?? 0);
 }
 
 /** Current account state, re-read immediately before each SMTP attempt. */

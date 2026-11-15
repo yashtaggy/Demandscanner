@@ -6,10 +6,12 @@
 
 import {
   claimDueRecipients,
+  countPendingRecipients,
   findRecipientAccount,
   markRecipientFailed,
   markRecipientSent,
   markRecipientSkipped,
+  releaseClaimedRecipients,
 } from "@/lib/signals/delivery-repository";
 
 const globalStore = globalThis as typeof globalThis & {
@@ -93,7 +95,7 @@ describe("claiming due work", () => {
     expect(call.text).toContain("email_lease_expires_at <= NOW()");
     expect(call.text).toContain("email_attempts < $1");
     expect(call.text).toContain("JOIN signals");
-    expect(call.values).toEqual([5, 5, OWNER, 90]);
+    expect(call.values).toEqual([5, null, null, 5, OWNER, 90]);
   });
 
   it("re-reads the recipient account immediately before each send", async () => {
@@ -240,5 +242,49 @@ describe("signal integrity", () => {
         /(?:UPDATE|DELETE\s+FROM|INSERT\s+INTO)\s+signals\b/i
       );
     }
+  });
+});
+
+describe("immediate dispatch support", () => {
+  it("narrows the claim to one signal", async () => {
+    await claimDueRecipients(OWNER, 5, 90, SIGNAL_ID);
+
+    const call = fake.calls[0];
+    expect(call.text).toContain("r.signal_id = $3::uuid");
+    expect(call.text).toContain("FOR UPDATE SKIP LOCKED");
+    expect(call.values).toEqual([5, SIGNAL_ID, SIGNAL_ID, 5, OWNER, 90]);
+  });
+
+  it("returns unattempted claims to PENDING under the lease owner", async () => {
+    fake.responses.push([{ recipient_id: RECIPIENT_ID }]);
+
+    const released = await releaseClaimedRecipients(
+      [RECIPIENT_ID, USER_ID],
+      OWNER
+    );
+
+    expect(released).toBe(1);
+    const call = fake.calls[0];
+    expect(call.text).toContain("SET email_status = 'PENDING'");
+    expect(call.text).toContain("email_lease_owner = NULL");
+    expect(call.text).toContain("email_lease_expires_at = NULL");
+    expect(call.text).toContain("email_last_attempt_at = NULL");
+    expect(call.text).toContain("email_status = 'SENDING'");
+    expect(call.text).toContain("email_lease_owner = $2");
+    expect(call.values).toEqual([[RECIPIENT_ID, USER_ID], OWNER]);
+  });
+
+  it("skips the release query when nothing was deferred", async () => {
+    await expect(releaseClaimedRecipients([], OWNER)).resolves.toBe(0);
+    expect(fake.calls).toHaveLength(0);
+  });
+
+  it("counts only the signal's queued recipients", async () => {
+    fake.responses.push([{ n: 3 }]);
+
+    await expect(countPendingRecipients(SIGNAL_ID)).resolves.toBe(3);
+    expect(fake.calls[0].text).toContain("email_status = 'PENDING'");
+    expect(fake.calls[0].text).toContain("signal_id = $1::uuid");
+    expect(fake.calls[0].values).toEqual([SIGNAL_ID]);
   });
 });
