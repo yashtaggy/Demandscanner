@@ -63,15 +63,20 @@ export function Watchlist({
   });
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-200">Watchlist</h2>
-        <p className="text-[10px] text-slate-600">
-          Order is saved on the server. Arrows reorder within the visible list.
+    <div className="ds-lt-watchlist space-y-3">
+      <div className="flex flex-wrap items-end justify-between gap-2 px-1">
+        <div>
+          <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[var(--ds-gold-700)]">
+            Saved order
+          </p>
+          <h2 className="mt-0.5 text-[15px] font-bold text-[var(--ds-text)]">Watchlist</h2>
+        </div>
+        <p className="text-[10px] text-[var(--ds-text-muted)]">
+          Arrows reorder within the visible list. Every change is saved.
         </p>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         {items.map((item, index) => (
           <WatchlistRow
             key={item.itemId}

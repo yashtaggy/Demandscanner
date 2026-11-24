@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChartCandlestick, FolderPlus, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   createGroup,
@@ -38,12 +39,10 @@ import {
 import { Watchlist } from "./watchlist";
 import {
   WorkspaceHeader,
-  type MarketStatusView,
   type QuoteSummaryView,
 } from "./workspace-header";
 
 interface LiveTradeWorkspaceProps {
-  authMarket: MarketStatusView | null;
   /** null while the browser is still checking broker connectivity. */
   brokerConnected: boolean | null;
 }
@@ -124,13 +123,13 @@ function groupReorderPayloadFor(
 
 function WorkspaceSkeleton() {
   return (
-    <div className="space-y-3" aria-label="Loading Live Trade workspace">
-      <div className="h-36 animate-pulse rounded-2xl bg-slate-800/40" />
-      <div className="h-10 animate-pulse rounded-lg bg-slate-800/30" />
+    <div className="space-y-4" aria-label="Loading Live Trade workspace">
+      <div className="h-44 animate-pulse rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)]" />
+      <div className="h-20 animate-pulse rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)]" />
       {[0, 1, 2].map((row) => (
         <div
           key={row}
-          className="h-44 animate-pulse rounded-xl bg-slate-800/30"
+          className="h-56 animate-pulse rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)]"
         />
       ))}
     </div>
@@ -143,6 +142,7 @@ function ReconnectLink() {
       type="button"
       variant="primary"
       size="sm"
+      className="min-h-11 border-[var(--ds-gold-500)] bg-[var(--ds-gold-300)] text-[var(--ds-text)] hover:bg-[var(--ds-gold-500)] focus-visible:ring-[var(--ds-gold-700)] focus-visible:ring-offset-[var(--ds-canvas)]"
       onClick={() => {
         window.location.assign(
           new URL("/api/kite/login", window.location.origin).toString()
@@ -160,6 +160,7 @@ function SignInLink() {
       type="button"
       variant="primary"
       size="sm"
+      className="min-h-11 border-[var(--ds-gold-500)] bg-[var(--ds-gold-300)] text-[var(--ds-text)] hover:bg-[var(--ds-gold-500)] focus-visible:ring-[var(--ds-gold-700)] focus-visible:ring-offset-[var(--ds-canvas)]"
       onClick={() => {
         window.location.assign(
           new URL("/login?next=%2Flive-trade", window.location.origin).toString()
@@ -172,7 +173,6 @@ function SignInLink() {
 }
 
 export function LiveTradeWorkspace({
-  authMarket,
   brokerConnected,
 }: LiveTradeWorkspaceProps) {
   const { board, loading, refreshing, error, refetch, runBoardTask } =
@@ -255,7 +255,6 @@ export function LiveTradeWorkspace({
 
   const {
     quotes,
-    market: quoteMarket,
     fetchedAt,
     zonesAvailable,
     loading: quotesLoading,
@@ -567,11 +566,10 @@ export function LiveTradeWorkspace({
     quoteError?.code === "TOKEN_EXPIRED";
 
   return (
-    <div className="space-y-4">
+    <div className="ds-live-trade space-y-5">
       <WorkspaceHeader
         entryCount={items.length}
         groupCount={groups.length}
-        market={quoteMarket ?? authMarket}
         fetchedAt={fetchedAt}
         quoteSummary={quoteSummary}
         quotesLoading={quotesLoading}
@@ -585,15 +583,14 @@ export function LiveTradeWorkspace({
       {appSessionExpired && (
         <div
           role="alert"
-          className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          className="flex flex-col gap-3 rounded-xl border border-[var(--ds-gold-300)] bg-[var(--ds-warning-soft)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
-            <p className="text-sm font-medium text-amber-300">
+            <p className="text-sm font-semibold text-[var(--ds-warning)]">
               Your DemandScan session needs attention
             </p>
-            <p className="mt-0.5 text-xs text-amber-400/80">
-              Sign in again to view and change your board. Nothing has been
-              removed from your workspace.
+            <p className="mt-1 text-xs leading-relaxed text-[var(--ds-text-secondary)]">
+              Sign in again to view and change your board. Nothing has been removed from your workspace.
             </p>
           </div>
           <SignInLink />
@@ -603,15 +600,14 @@ export function LiveTradeWorkspace({
       {brokerIssue && !appSessionExpired && (
         <div
           role="alert"
-          className="flex flex-col gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          className="flex flex-col gap-3 rounded-xl border border-[var(--ds-gold-300)] bg-[var(--ds-warning-soft)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
-            <p className="text-sm font-medium text-amber-300">
+            <p className="text-sm font-semibold text-[var(--ds-warning)]">
               Connect Kite to load live quotes
             </p>
-            <p className="mt-0.5 text-xs text-amber-400/80">
-              Your board and plans stay available. Quotes require your own Kite
-              connection and are never fetched from another account.
+            <p className="mt-1 text-xs leading-relaxed text-[var(--ds-text-secondary)]">
+              Your board and plans stay available. Quotes require your own Kite connection and are never fetched from another account.
             </p>
           </div>
           <ReconnectLink />
@@ -621,13 +617,13 @@ export function LiveTradeWorkspace({
       {error && !appSessionExpired && (
         <div
           role="alert"
-          className="flex flex-col gap-3 rounded-xl border border-rose-500/25 bg-rose-500/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          className="flex flex-col gap-3 rounded-xl border border-[var(--ds-negative)]/25 bg-[var(--ds-negative-soft)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
         >
           <div>
-            <p className="text-sm font-medium text-rose-300">
+            <p className="text-sm font-semibold text-[var(--ds-negative)]">
               {board ? "The workspace could not be refreshed" : "The workspace could not be loaded"}
             </p>
-            <p className="mt-0.5 text-xs text-rose-300/80">
+            <p className="mt-1 text-xs text-[var(--ds-text-secondary)]">
               {liveTradeErrorMessage(error)}
             </p>
           </div>
@@ -637,6 +633,7 @@ export function LiveTradeWorkspace({
             size="sm"
             loading={refreshing || loading}
             onClick={() => void refetch()}
+            className="min-h-11 border-[var(--ds-border)] bg-[var(--ds-surface)] text-[var(--ds-text-secondary)] hover:bg-[var(--ds-gold-50)] hover:text-[var(--ds-text)] focus-visible:ring-offset-[var(--ds-canvas)]"
           >
             Try again
           </Button>
@@ -646,57 +643,23 @@ export function LiveTradeWorkspace({
       {loading && !board ? (
         <WorkspaceSkeleton />
       ) : !board ? (
-        <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 px-4 py-10 text-center">
-          <p className="text-sm text-slate-400">
+        <div className="rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] px-5 py-12 text-center shadow-[var(--ds-shadow-card)]">
+          <p className="text-sm font-medium text-[var(--ds-text-secondary)]">
             The workspace is unavailable right now.
           </p>
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            className="mt-3"
+            className="mt-4 min-h-11 border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] text-[var(--ds-text)] hover:bg-[var(--ds-gold-50)] focus-visible:ring-offset-[var(--ds-canvas)]"
             onClick={() => void refetch()}
           >
             Retry
           </Button>
         </div>
       ) : items.length === 0 ? (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="rounded-xl border border-dashed border-slate-700/60 bg-slate-800/20 px-5 py-10 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-indigo-500/10">
-              <svg
-                className="h-6 w-6 text-indigo-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                aria-hidden="true"
-              >
-                <path d="M3 3v18h18" />
-                <path d="M7 14l4-4 3 3 5-6" />
-              </svg>
-            </div>
-            <h2 className="mt-3 text-sm font-semibold text-slate-200">
-              Your board is empty
-            </h2>
-            <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-slate-500">
-              Search for an active NSE stock to start planning. Adding an
-              instrument only saves it to your personal board — it never places
-              an order.
-            </p>
-            <div className="mt-4 flex justify-center">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setGroupManagerOpen(true)}
-              >
-                Create groups
-              </Button>
-            </div>
-          </section>
-
-          <div className="space-y-4">
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <aside className="order-first space-y-4 xl:order-last">
             <InstrumentSearch
               items={items}
               enabled
@@ -705,11 +668,63 @@ export function LiveTradeWorkspace({
               onAdd={handleAdd}
             />
             <CoverageGuide />
-          </div>
+          </aside>
+
+          <section className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--ds-border-strong)] bg-[var(--ds-surface)] px-6 py-12 text-center shadow-[var(--ds-shadow-card)]">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--ds-gold-300)] bg-[var(--ds-gold-50)] text-[var(--ds-gold-700)]">
+              <ChartCandlestick className="h-7 w-7" strokeWidth={1.5} aria-hidden="true" />
+            </div>
+            <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--ds-gold-700)]">
+              Start with context
+            </p>
+            <h2 className="mt-2 text-xl font-bold tracking-tight text-[var(--ds-text)]">
+              Your board is empty
+            </h2>
+            <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-[var(--ds-text-secondary)]">
+              Search for an active NSE stock to start planning. Adding an instrument only saves it to your personal board — it never places an order.
+            </p>
+            <div className="mt-6 grid w-full max-w-lg gap-2 text-left sm:grid-cols-3">
+              {[
+                ["Private board", "Entries belong to your account."],
+                ["Independent plans", "Repeat symbols keep separate setups."],
+                ["Clear evidence", "Quotes and zones stay distinct."],
+              ].map(([title, detail]) => (
+                <div key={title} className="rounded-xl border border-[var(--ds-border)] bg-[var(--ds-gold-50)]/50 px-3 py-3">
+                  <p className="text-[11px] font-bold text-[var(--ds-text)]">{title}</p>
+                  <p className="mt-1 text-[10px] leading-relaxed text-[var(--ds-text-muted)]">{detail}</p>
+                </div>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="mt-6 min-h-11 border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] text-[var(--ds-text-secondary)] hover:bg-[var(--ds-gold-50)] hover:text-[var(--ds-text)] focus-visible:ring-offset-[var(--ds-canvas)]"
+              onClick={() => setGroupManagerOpen(true)}
+            >
+              <FolderPlus className="h-3.5 w-3.5" aria-hidden="true" />
+              Create groups
+            </Button>
+          </section>
         </div>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="min-w-0 space-y-3">
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <aside className="order-first space-y-4 xl:order-last xl:sticky xl:top-20">
+            <InstrumentSearch
+              items={items}
+              enabled
+              atLimit={items.length >= LIVE_TRADE_ITEM_LIMIT}
+              activeGroupId={activeGroupId}
+              onAdd={handleAdd}
+            />
+            {groups.length === 0 && (
+              <p className="rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)] px-4 py-3 text-[11px] leading-relaxed text-[var(--ds-text-muted)]">
+                No groups yet. Use “Manage groups” to organise the watchlist; instruments stay on the board when groups change.
+              </p>
+            )}
+          </aside>
+
+          <div className="min-w-0 space-y-4">
             <WatchlistToolbar
               search={search}
               onSearchChange={setSearch}
@@ -729,10 +744,8 @@ export function LiveTradeWorkspace({
             />
 
             {refreshing && (
-              <p
-                role="status"
-                className="text-[11px] text-slate-500"
-              >
+              <p role="status" className="flex items-center gap-2 text-[11px] text-[var(--ds-text-muted)]">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ds-gold-500)]" aria-hidden="true" />
                 Refreshing board…
               </p>
             )}
@@ -740,11 +753,10 @@ export function LiveTradeWorkspace({
             {zonesError !== null && (
               <div
                 role="alert"
-                className="flex flex-col gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 rounded-xl border border-[var(--ds-gold-300)] bg-[var(--ds-warning-soft)] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between"
               >
-                <p className="text-[11px] text-amber-300">
-                  Live zone summaries could not be loaded. Prices and plans
-                  are unaffected.
+                <p className="text-[11px] leading-relaxed text-[var(--ds-warning)]">
+                  Live zone summaries could not be loaded. Prices and plans are unaffected.
                 </p>
                 <Button
                   type="button"
@@ -752,6 +764,7 @@ export function LiveTradeWorkspace({
                   size="sm"
                   loading={zonesLoading}
                   onClick={reloadZones}
+                  className="min-h-11 shrink-0 border-[var(--ds-gold-300)] text-[var(--ds-warning)] hover:bg-[var(--ds-gold-100)] focus-visible:ring-offset-[var(--ds-warning-soft)]"
                 >
                   Retry zones
                 </Button>
@@ -759,11 +772,12 @@ export function LiveTradeWorkspace({
             )}
 
             {filteredItems.length === 0 ? (
-              <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 px-4 py-10 text-center">
-                <p className="text-sm text-slate-400">
+              <div className="rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] px-5 py-12 text-center shadow-[var(--ds-shadow-card)]">
+                <SearchX className="mx-auto h-7 w-7 text-[var(--ds-text-muted)]" strokeWidth={1.5} aria-hidden="true" />
+                <p className="mt-3 text-sm font-semibold text-[var(--ds-text)]">
                   No instruments match these filters.
                 </p>
-                <p className="mt-1 text-xs text-slate-600">
+                <p className="mt-1 text-xs text-[var(--ds-text-muted)]">
                   {formatCount(items.length)} trade entries are tracked in total.
                 </p>
                 {hasFilters && (
@@ -771,7 +785,7 @@ export function LiveTradeWorkspace({
                     type="button"
                     variant="secondary"
                     size="sm"
-                    className="mt-3"
+                    className="mt-4 min-h-11 border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] text-[var(--ds-text)] hover:bg-[var(--ds-gold-50)] focus-visible:ring-offset-[var(--ds-canvas)]"
                     onClick={() => {
                       setSearch("");
                       setGroupFilter("ALL");
@@ -807,22 +821,6 @@ export function LiveTradeWorkspace({
 
             <CoverageGuide />
           </div>
-
-          <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
-            <InstrumentSearch
-              items={items}
-              enabled
-              atLimit={items.length >= LIVE_TRADE_ITEM_LIMIT}
-              activeGroupId={activeGroupId}
-              onAdd={handleAdd}
-            />
-            {groups.length === 0 && (
-              <p className="rounded-xl border border-slate-700/40 bg-slate-800/20 px-4 py-3 text-[11px] leading-relaxed text-slate-500">
-                No groups yet. Use “Manage groups” to organise the watchlist;
-                instruments stay on the board when groups change.
-              </p>
-            )}
-          </aside>
         </div>
       )}
 

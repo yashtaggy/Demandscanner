@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown, ChevronUp, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { LiveTradeGroupDto } from "@/lib/live-trade/client";
 import { liveTradeErrorMessage } from "@/lib/live-trade/client";
@@ -20,7 +21,7 @@ interface GroupManagerProps {
 }
 
 const inputClass =
-  "w-full rounded-md border border-slate-700/60 bg-slate-900/70 px-2 py-1 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500/60";
+  "min-h-11 w-full rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] px-3 py-2 text-xs text-[var(--ds-text)] placeholder:text-[var(--ds-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--ds-gold-500)]/40";
 
 export function GroupManager({
   groups,
@@ -147,6 +148,7 @@ export function GroupManager({
             type="button"
             variant="ghost"
             size="sm"
+            className="ds-lt-button-ghost"
             onClick={onClose}
             disabled={busy}
           >
@@ -159,7 +161,7 @@ export function GroupManager({
         {error && (
           <p
             role="alert"
-            className="rounded-lg border border-rose-500/25 bg-rose-500/5 px-3 py-2 text-xs text-rose-300"
+            className="rounded-lg border border-[var(--ds-negative)]/25 bg-[var(--ds-negative-soft)] px-3 py-2 text-xs leading-relaxed text-[var(--ds-negative)]"
           >
             {error}
           </p>
@@ -167,12 +169,12 @@ export function GroupManager({
 
         <form
           onSubmit={(event) => void handleCreate(event)}
-          className="flex items-end gap-2"
+          className="flex flex-col gap-2 sm:flex-row sm:items-end"
         >
           <div className="flex-1 space-y-1">
             <label
               htmlFor="new-group-name"
-              className="text-[11px] font-medium text-slate-400"
+              className="text-[11px] font-semibold text-[var(--ds-text-secondary)]"
             >
               New group
             </label>
@@ -195,6 +197,7 @@ export function GroupManager({
             type="submit"
             variant="secondary"
             size="sm"
+            className="ds-lt-button-secondary"
             loading={creating}
             disabled={atLimit || creating || newName.trim() === ""}
           >
@@ -203,18 +206,18 @@ export function GroupManager({
         </form>
 
         {atLimit && (
-          <p className="text-[11px] text-amber-400">
+          <p className="text-[11px] leading-relaxed text-[var(--ds-warning)]">
             The {LIVE_TRADE_GROUP_LIMIT}-group limit is reached. Delete a group
             to create another.
           </p>
         )}
 
         {groups.length === 0 ? (
-          <p className="rounded-lg border border-slate-700/40 bg-slate-800/30 px-3 py-4 text-center text-xs text-slate-500">
+          <p className="rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface-subtle)] px-3 py-4 text-center text-xs leading-relaxed text-[var(--ds-text-muted)]">
             No groups yet. Create one to organise the watchlist.
           </p>
         ) : (
-          <ul className="divide-y divide-slate-700/40 rounded-lg border border-slate-700/40">
+          <ul className="divide-y divide-[var(--ds-border)] overflow-hidden rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface)]">
             {groups.map((group, index) => {
               const editing = editingId === group.groupId;
               const deleting = confirmDeleteId === group.groupId;
@@ -224,7 +227,7 @@ export function GroupManager({
                 <li key={group.groupId} className="px-3 py-2">
                   {deleting ? (
                     <div className="space-y-2">
-                      <p className="text-xs text-slate-300">
+                      <p className="text-xs leading-relaxed text-[var(--ds-text-secondary)]">
                         Delete “{group.name}”? Instruments in this group will
                         become ungrouped. They will not be deleted.
                       </p>
@@ -233,6 +236,7 @@ export function GroupManager({
                           type="button"
                           variant="danger"
                           size="sm"
+                          className="ds-lt-button-danger"
                           loading={pending}
                           onClick={() => void handleDelete(group)}
                         >
@@ -242,6 +246,7 @@ export function GroupManager({
                           type="button"
                           variant="ghost"
                           size="sm"
+                          className="ds-lt-button-ghost"
                           disabled={pending}
                           onClick={() => setConfirmDeleteId(null)}
                         >
@@ -250,7 +255,7 @@ export function GroupManager({
                       </div>
                     </div>
                   ) : editing ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <input
                         type="text"
                         value={editingName}
@@ -264,6 +269,7 @@ export function GroupManager({
                         type="button"
                         variant="primary"
                         size="sm"
+                        className="ds-lt-button-primary"
                         loading={pending}
                         onClick={() => void handleRename(group)}
                       >
@@ -273,6 +279,7 @@ export function GroupManager({
                         type="button"
                         variant="ghost"
                         size="sm"
+                        className="ds-lt-button-ghost"
                         disabled={pending}
                         onClick={() => setEditingId(null)}
                       >
@@ -281,17 +288,19 @@ export function GroupManager({
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs text-slate-200">{group.name}</span>
-                      <div className="flex items-center gap-1">
+                      <span className="min-w-0 truncate text-xs font-semibold text-[var(--ds-text)]">
+                        {group.name}
+                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <button
                           type="button"
                           aria-label={`Move ${group.name} up`}
                           title="Move up"
                           disabled={busy || index === 0}
                           onClick={() => void moveGroup(index, "up")}
-                          className="rounded border border-slate-700/50 bg-slate-800/40 px-1.5 py-1 text-[11px] text-slate-400 hover:text-slate-200 disabled:opacity-30"
+                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-gold-50)] hover:text-[var(--ds-text)] disabled:cursor-not-allowed disabled:opacity-30"
                         >
-                          ↑
+                          <ChevronUp className="h-4 w-4" aria-hidden="true" />
                         </button>
                         <button
                           type="button"
@@ -299,9 +308,9 @@ export function GroupManager({
                           title="Move down"
                           disabled={busy || index === groups.length - 1}
                           onClick={() => void moveGroup(index, "down")}
-                          className="rounded border border-slate-700/50 bg-slate-800/40 px-1.5 py-1 text-[11px] text-slate-400 hover:text-slate-200 disabled:opacity-30"
+                          className="flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-gold-50)] hover:text-[var(--ds-text)] disabled:cursor-not-allowed disabled:opacity-30"
                         >
-                          ↓
+                          <ChevronDown className="h-4 w-4" aria-hidden="true" />
                         </button>
                         <button
                           type="button"
@@ -312,8 +321,9 @@ export function GroupManager({
                             setError(null);
                           }}
                           disabled={rowActionsDisabled}
-                          className="rounded border border-slate-700/50 bg-slate-800/40 px-1.5 py-1 text-[11px] text-slate-300 hover:bg-slate-700/50 disabled:opacity-30"
+                          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] px-3 text-[11px] font-semibold text-[var(--ds-text-secondary)] hover:bg-[var(--ds-gold-50)] hover:text-[var(--ds-text)] disabled:cursor-not-allowed disabled:opacity-30"
                         >
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                           Rename
                         </button>
                         <button
@@ -324,8 +334,9 @@ export function GroupManager({
                             setError(null);
                           }}
                           disabled={rowActionsDisabled}
-                          className="rounded border border-rose-500/20 bg-rose-500/5 px-1.5 py-1 text-[11px] text-rose-400 hover:bg-rose-500/10 disabled:opacity-30"
+                          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--ds-negative)]/20 bg-[var(--ds-negative-soft)] px-3 text-[11px] font-semibold text-[var(--ds-negative)] hover:bg-[var(--ds-negative)]/10 disabled:cursor-not-allowed disabled:opacity-30"
                         >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                           Delete
                         </button>
                       </div>

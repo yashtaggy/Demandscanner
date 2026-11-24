@@ -328,3 +328,111 @@ html {
 .duration-200 { animation-duration: 200ms; }
 .duration-250 { animation-duration: 250ms; }
 .duration-300 { animation-duration: 300ms; }
+
+.ds-live-trade {
+  --ds-font-sans: var(--font-manrope), "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --ds-font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+  color: var(--ds-text);
+  background: var(--ds-canvas);
+  font-family: var(--ds-font-sans);
+}
+
+.ds-live-trade select option {
+  background: var(--ds-surface-elevated);
+  color: var(--ds-text);
+}
+
+.ds-live-trade .ds-lt-button-primary,
+.ds-live-trade .ds-lt-button-secondary,
+.ds-live-trade .ds-lt-button-ghost,
+.ds-live-trade .ds-lt-button-danger {
+  min-height: 2.75rem;
+  --tw-ring-color: var(--ds-gold-500);
+  --tw-ring-offset-color: var(--ds-surface-elevated);
+}
+
+.ds-live-trade .ds-lt-button-primary {
+  border-color: var(--ds-gold-500);
+  background: var(--ds-gold-300);
+  color: var(--ds-text);
+  box-shadow: none;
+}
+
+.ds-live-trade .ds-lt-button-primary:hover:not(:disabled) {
+  background: var(--ds-gold-500);
+}
+
+.ds-live-trade .ds-lt-button-secondary {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-elevated);
+  color: var(--ds-text-secondary);
+}
+
+.ds-live-trade .ds-lt-button-secondary:hover:not(:disabled) {
+  border-color: var(--ds-border-strong);
+  background: var(--ds-gold-50);
+  color: var(--ds-text);
+}
+
+.ds-live-trade .ds-lt-button-ghost {
+  border-color: var(--ds-border);
+  background: transparent;
+  color: var(--ds-text-secondary);
+}
+
+.ds-live-trade .ds-lt-button-ghost:hover:not(:disabled) {
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text);
+}
+
+.ds-live-trade .ds-lt-button-danger {
+  border-color: color-mix(in srgb, var(--ds-negative) 30%, transparent);
+  background: var(--ds-negative-soft);
+  color: var(--ds-negative);
+}
+
+.ds-live-trade .ds-lt-button-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ds-negative) 12%, var(--ds-surface-elevated));
+}
+
+.ds-lt-spinner {
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ds-lt-spin 0.65s linear infinite;
+}
+
+@keyframes ds-lt-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ds-lt-watchlist {
+  container-type: inline-size;
+}
+
+.ds-lt-row-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+@container (min-width: 560px) {
+  .ds-lt-row-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ds-lt-row-zone {
+    grid-column: 1 / -1;
+  }
+}
+
+@container (min-width: 860px) {
+  .ds-lt-row-grid {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 0.9fr) minmax(0, 1.5fr);
+  }
+  .ds-lt-row-zone {
+    grid-column: auto;
+  }
+}

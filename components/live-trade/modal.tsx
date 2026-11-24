@@ -39,8 +39,15 @@ export function Modal({
   closeDisabled = false,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const closeRef = useRef(onClose);
+  const closeDisabledRef = useRef(closeDisabled);
   const titleId = useId();
   const descriptionId = useId();
+
+  useEffect(() => {
+    closeRef.current = onClose;
+    closeDisabledRef.current = closeDisabled;
+  }, [onClose, closeDisabled]);
 
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
@@ -60,9 +67,9 @@ export function Modal({
     target?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !closeDisabled) {
+      if (event.key === "Escape" && !closeDisabledRef.current) {
         event.preventDefault();
-        onClose();
+        closeRef.current();
         return;
       }
       if (event.key !== "Tab" || panel === null) return;
@@ -90,13 +97,13 @@ export function Modal({
       document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus();
     };
-  }, [open, closeDisabled, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-3 sm:p-6 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[rgb(30_28_23/0.62)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm animate-in fade-in duration-200 sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !closeDisabled) onClose();
       }}
@@ -109,19 +116,22 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          "flex max-h-[92vh] w-full flex-col overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-900 shadow-2xl",
+          "flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-2xl border border-[var(--ds-border-strong)] bg-[var(--ds-surface-elevated)] shadow-[var(--ds-shadow-float)]",
           "animate-in slide-in-from-top-1 duration-200 focus:outline-none",
           SIZE_CLASS[size]
         )}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-700/50 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-[var(--ds-border)] bg-[var(--ds-gold-50)]/45 px-5 py-4">
           <div className="min-w-0">
-            <h2 id={titleId} className="text-base font-semibold text-slate-100">
+            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[var(--ds-gold-700)]">
+              Live Trade
+            </p>
+            <h2 id={titleId} className="mt-1 text-base font-bold text-[var(--ds-text)]">
               {title}
             </h2>
             {description && (
-              <p id={descriptionId} className="mt-1 text-xs text-slate-500">
+              <p id={descriptionId} className="mt-1 text-xs leading-relaxed text-[var(--ds-text-secondary)]">
                 {description}
               </p>
             )}
@@ -131,7 +141,7 @@ export function Modal({
             onClick={onClose}
             disabled={closeDisabled}
             aria-label="Close dialog"
-            className="rounded-md p-1 text-slate-500 transition-colors hover:bg-slate-700/50 hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+            className="-mr-2 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-gold-100)] hover:text-[var(--ds-text)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             <svg
               className="h-4 w-4"
@@ -147,10 +157,10 @@ export function Modal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-5">{children}</div>
 
         {footer && (
-          <div className="border-t border-slate-700/50 bg-slate-900/80 px-5 py-3">
+          <div className="border-t border-[var(--ds-border)] bg-[var(--ds-surface)] px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {footer}
           </div>
         )}

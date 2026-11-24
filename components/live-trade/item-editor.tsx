@@ -102,9 +102,9 @@ function parsePriceField(raw: string, label: string): ParsedPrice {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-slate-700/60 bg-slate-900/70 px-2.5 py-1.5 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500/60";
-const labelClass = "text-[11px] font-medium text-slate-400";
-const errorClass = "text-[11px] text-rose-400";
+  "min-h-11 w-full rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] px-3 py-2 text-sm text-[var(--ds-text)] placeholder:text-[var(--ds-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--ds-gold-500)]/40";
+const labelClass = "text-[11px] font-semibold text-[var(--ds-text-secondary)]";
+const errorClass = "text-[11px] text-[var(--ds-negative)]";
 
 export function ItemEditor({
   item,
@@ -238,7 +238,7 @@ export function ItemEditor({
       closeDisabled={saving}
       footer={
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[10px] text-slate-600">
+          <p className="text-[10px] leading-relaxed text-[var(--ds-text-muted)]">
             Planned levels only — no order is placed.
           </p>
           <div className="flex justify-end gap-2">
@@ -246,6 +246,7 @@ export function ItemEditor({
               type="button"
               variant="ghost"
               size="sm"
+              className="ds-lt-button-ghost"
               onClick={requestClose}
               disabled={saving}
             >
@@ -256,6 +257,7 @@ export function ItemEditor({
               form="live-trade-item-form"
               variant="primary"
               size="sm"
+              className="ds-lt-button-primary"
               loading={saving}
               disabled={!dirty || saving}
             >
@@ -266,8 +268,8 @@ export function ItemEditor({
       }
     >
       {confirmDiscard && (
-        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-          <p className="text-xs text-amber-300">
+        <div className="mb-4 rounded-lg border border-[var(--ds-warning)]/25 bg-[var(--ds-warning-soft)] p-3">
+          <p className="text-xs leading-relaxed text-[var(--ds-warning)]">
             You have unsaved changes. Discard them and close?
           </p>
           <div className="mt-2 flex gap-2">
@@ -275,6 +277,7 @@ export function ItemEditor({
               type="button"
               variant="ghost"
               size="sm"
+              className="ds-lt-button-ghost"
               onClick={() => setConfirmDiscard(false)}
             >
               Keep editing
@@ -283,6 +286,7 @@ export function ItemEditor({
               type="button"
               variant="danger"
               size="sm"
+              className="ds-lt-button-danger"
               onClick={onClose}
             >
               Discard and close
@@ -296,8 +300,8 @@ export function ItemEditor({
           role={notice.kind === "error" ? "alert" : "status"}
           className={
             notice.kind === "error"
-              ? "mb-4 rounded-lg border border-rose-500/25 bg-rose-500/5 p-3 text-xs text-rose-300"
-              : "mb-4 rounded-lg border border-amber-500/25 bg-amber-500/5 p-3 text-xs text-amber-300"
+              ? "mb-4 rounded-lg border border-[var(--ds-negative)]/25 bg-[var(--ds-negative-soft)] p-3 text-xs leading-relaxed text-[var(--ds-negative)]"
+              : "mb-4 rounded-lg border border-[var(--ds-warning)]/25 bg-[var(--ds-warning-soft)] p-3 text-xs leading-relaxed text-[var(--ds-warning)]"
           }
         >
           {notice.message}
@@ -310,6 +314,15 @@ export function ItemEditor({
         className="space-y-4"
         noValidate
       >
+        <div className="space-y-1.5">
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ds-gold-700)]">
+            Planning context
+          </h3>
+          <p className="text-[11px] leading-relaxed text-[var(--ds-text-muted)]">
+            Set how this independent entry is organised and evaluated.
+          </p>
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <label htmlFor="item-priority" className={labelClass}>
@@ -409,6 +422,15 @@ export function ItemEditor({
           </div>
         </div>
 
+        <div className="space-y-1.5 border-t border-[var(--ds-border)] pt-4">
+          <h3 className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ds-gold-700)]">
+            Planned price levels
+          </h3>
+          <p className="text-[11px] leading-relaxed text-[var(--ds-text-muted)]">
+            These levels belong to this entry only and never create an order.
+          </p>
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1">
             <label htmlFor="item-entry" className={labelClass}>
@@ -491,7 +513,7 @@ export function ItemEditor({
             <label htmlFor="item-notes" className={labelClass}>
               Notes
             </label>
-            <span className="text-[10px] tabular-nums text-slate-600">
+            <span className="text-[10px] tabular-nums text-[var(--ds-text-muted)]">
               {Array.from(form.notes).length} / {LIVE_TRADE_NOTES_MAX_LENGTH}
             </span>
           </div>
@@ -513,7 +535,7 @@ export function ItemEditor({
           )}
         </div>
 
-        <p className="text-[10px] text-slate-600">
+        <p className="text-[10px] text-[var(--ds-text-muted)]">
           An empty price field clears that level. Prices must be greater than
           zero and support up to {LIVE_TRADE_PRICE_DECIMALS} decimal places.
         </p>

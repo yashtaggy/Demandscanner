@@ -1,6 +1,7 @@
 "use client";
 
-import { Header } from "@/components/header";
+import { ChartCandlestick, ShieldCheck } from "lucide-react";
+import { OverviewShell } from "@/components/overview/app-shell";
 import { Button } from "@/components/ui/button";
 import { LiveTradeWorkspace } from "@/components/live-trade/workspace";
 import { SubscriptionAccessNotice } from "@/components/subscription/access-notice";
@@ -27,55 +28,38 @@ export default function LiveTradePage() {
     ? null
     : (brokerStatus?.authenticated ?? false);
 
-  const market = brokerStatus?.market
-    ? {
-        isOpen: brokerStatus.market.isOpen,
-        exchange: brokerStatus.market.exchange,
-      }
-    : null;
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <Header lastRefreshed={null} />
-
-      <main className="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6">
+    <OverviewShell lastRefreshed={null}>
+      <main className="ds-live-trade mx-auto w-full max-w-[1680px] px-4 pb-10 pt-5 sm:px-6 sm:pt-6 lg:px-8">
         {authLoading ? (
           <div
-            className="space-y-3"
+            className="space-y-4"
             aria-label="Checking your DemandScan session"
           >
-            <div className="h-36 animate-pulse rounded-2xl bg-slate-800/40" />
-            <div className="h-10 animate-pulse rounded-lg bg-slate-800/30" />
-            <div className="h-44 animate-pulse rounded-xl bg-slate-800/30" />
+            <div className="h-32 animate-pulse rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)]" />
+            <div className="h-20 animate-pulse rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)]" />
+            <div className="h-64 animate-pulse rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)]" />
           </div>
         ) : !appUser ? (
-          <div className="mx-auto max-w-lg rounded-2xl border border-indigo-500/30 bg-indigo-500/5 px-6 py-10 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-indigo-500/15">
-              <svg
-                className="h-7 w-7 text-indigo-400"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                aria-hidden="true"
-              >
-                <path d="M3 3v18h18" />
-                <path d="M7 14l4-4 3 3 5-6" />
-              </svg>
+          <section className="mx-auto max-w-xl rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] px-6 py-10 text-center shadow-[var(--ds-shadow-card)] sm:px-10 sm:py-12">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--ds-gold-300)] bg-[var(--ds-gold-50)] text-[var(--ds-gold-700)]">
+              <ChartCandlestick className="h-7 w-7" strokeWidth={1.6} aria-hidden="true" />
             </div>
-            <h1 className="mt-4 text-base font-semibold text-slate-100">
+            <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--ds-gold-700)]">
+              Private trading workspace
+            </p>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-[var(--ds-text)]">
               Sign in to use Live Trade
             </h1>
-            <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-slate-500">
-              Live Trade keeps its board, groups and trade plans against your
-              DemandScan account. Connecting Kite is a separate step used only
-              for market quotes.
+            <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--ds-text-secondary)]">
+              Keep your watchlist, groups and trade plans against your DemandScan
+              account. Kite is a separate connection used only for market quotes.
             </p>
             <Button
               type="button"
               variant="primary"
               size="lg"
-              className="mt-5"
+              className="mt-6 min-h-11 border-[var(--ds-gold-500)] bg-[var(--ds-gold-300)] px-5 text-[var(--ds-text)] shadow-none hover:bg-[var(--ds-gold-500)] focus-visible:ring-[var(--ds-gold-700)] focus-visible:ring-offset-[var(--ds-canvas)]"
               onClick={() => {
                 window.location.assign(
                   new URL("/login?next=%2Flive-trade", window.location.origin).toString()
@@ -84,18 +68,19 @@ export default function LiveTradePage() {
             >
               Sign in
             </Button>
-          </div>
+            <p className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-[var(--ds-text-secondary)]">
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              Your board remains private to your account.
+            </p>
+          </section>
         ) : subscriptionLoading ? (
-          <SubscriptionAccessNotice checking current={null} />
+          <SubscriptionAccessNotice checking current={null} light />
         ) : accessBlocked ? (
-          <SubscriptionAccessNotice current={subscription?.current ?? null} />
+          <SubscriptionAccessNotice current={subscription?.current ?? null} light />
         ) : (
-          <LiveTradeWorkspace
-            authMarket={market}
-            brokerConnected={brokerConnected}
-          />
+          <LiveTradeWorkspace brokerConnected={brokerConnected} />
         )}
       </main>
-    </div>
+    </OverviewShell>
   );
 }

@@ -1,15 +1,10 @@
 "use client";
 
+import { ChartCandlestick, RotateCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { QuoteDisplayState } from "@/hooks/use-live-trade-quotes";
 import { formatDateTimeIst, formatCount } from "@/lib/live-trade/ui";
-
-export interface MarketStatusView {
-  isOpen: boolean;
-  exchange: string;
-  approximation?: string;
-}
 
 export interface QuoteSummaryView {
   total: number;
@@ -22,7 +17,6 @@ export interface QuoteSummaryView {
 interface WorkspaceHeaderProps {
   entryCount: number;
   groupCount: number;
-  market: MarketStatusView | null;
   fetchedAt: string | null;
   quoteSummary: QuoteSummaryView;
   quotesLoading: boolean;
@@ -36,7 +30,6 @@ interface WorkspaceHeaderProps {
 export function WorkspaceHeader({
   entryCount,
   groupCount,
-  market,
   fetchedAt,
   quoteSummary,
   quotesLoading,
@@ -63,41 +56,49 @@ export function WorkspaceHeader({
           ? "Connect Kite to refresh"
           : "Refresh quotes";
 
+  const stateLabel =
+    displayState === "stale"
+      ? "Stale snapshot"
+      : displayState === "sign-in"
+        ? "Sign in required"
+        : displayState === "broker"
+          ? "Kite connection required"
+          : null;
+
   return (
     <section
       aria-labelledby="live-trade-heading"
-      className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-4 sm:p-5"
+      className="overflow-hidden rounded-2xl border border-[var(--ds-border)] bg-[var(--ds-surface)] shadow-[var(--ds-shadow-card)]"
     >
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h1
-            id="live-trade-heading"
-            className="flex items-center gap-2 text-lg font-bold text-slate-100"
-          >
-            <span className="text-indigo-400" aria-hidden="true">
-              <svg
-                className="h-5 w-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M3 3v18h18" />
-                <path d="M7 14l4-4 3 3 5-6" />
-              </svg>
+      <div className="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[var(--ds-gold-300)] bg-[var(--ds-gold-50)] text-[var(--ds-gold-700)]">
+              <ChartCandlestick className="h-5 w-5" strokeWidth={1.8} aria-hidden="true" />
             </span>
-            Live Trade
-          </h1>
-          <p className="mt-1 text-xs text-slate-500">
-            Your personal market watchlist and trade planning workspace.
+            <div>
+              <p className="text-[9.5px] font-bold uppercase tracking-[0.18em] text-[var(--ds-gold-700)]">
+                Personal workspace
+              </p>
+              <h1
+                id="live-trade-heading"
+                className="mt-0.5 text-[26px] font-bold leading-tight tracking-tight text-[var(--ds-text)]"
+              >
+                Live Trade
+              </h1>
+            </div>
+          </div>
+          <p className="mt-3 max-w-xl text-[12.5px] leading-relaxed text-[var(--ds-text-secondary)]">
+            A considered watchlist for market context, structural zones and your own trade plans.
           </p>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <Badge variant="neutral">
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--ds-text-muted)]">
+            <span className="ds-mono font-semibold text-[var(--ds-text)]">
               {formatCount(entryCount)} tracked trade {entryCount === 1 ? "entry" : "entries"}
-            </Badge>
-            <Badge variant="neutral">
+            </span>
+            <span className="h-3 w-px bg-[var(--ds-border)]" aria-hidden="true" />
+            <span className="ds-mono font-semibold text-[var(--ds-text)]">
               {formatCount(groupCount)} {groupCount === 1 ? "group" : "groups"}
-            </Badge>
+            </span>
           </div>
         </div>
 
@@ -109,126 +110,70 @@ export function WorkspaceHeader({
           disabled={refreshDisabled || entryCount === 0}
           loading={quotesRefreshing || quotesLoading}
           id="refresh-quotes-btn"
+          className="min-h-11 self-start border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] px-3.5 text-[var(--ds-text-secondary)] shadow-none hover:border-[var(--ds-border-strong)] hover:bg-[var(--ds-gold-50)] hover:text-[var(--ds-text)] focus-visible:ring-[var(--ds-gold-700)] focus-visible:ring-offset-[var(--ds-surface)]"
         >
-          <svg
-            className="h-3.5 w-3.5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            aria-hidden="true"
-          >
-            <polyline points="23 4 23 10 17 10" />
-            <polyline points="1 20 1 14 7 14" />
-            <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-          </svg>
+          <RotateCw className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
           {refreshLabel}
         </Button>
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        <div className="rounded-xl border border-slate-700/40 bg-slate-900/40 px-3.5 py-3">
-          <p className="text-[10px] uppercase tracking-wider text-slate-600">
-            Market session
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            {market ? (
-              <Badge
-                variant={market.isOpen ? "success" : "neutral"}
-                dot={market.isOpen}
-              >
-                {market.exchange} {market.isOpen ? "Open" : "Closed"}
-              </Badge>
-            ) : (
-              <Badge variant="neutral">Status unavailable</Badge>
-            )}
-            <span
-              className="text-[10px] text-slate-500"
-              title={
-                market?.approximation ??
-                "Approximate regular NSE session; exchange holidays are not modelled."
-              }
-            >
-              Approximate session
-            </span>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-700/40 bg-slate-900/40 px-3.5 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[10px] uppercase tracking-wider text-slate-600">
-              Quote freshness
-            </p>
-            {displayState === "stale" && (
-              <Badge variant="warning">Stale snapshot</Badge>
-            )}
-            {displayState === "sign-in" && (
-              <Badge variant="warning">Sign in required</Badge>
-            )}
-            {displayState === "broker" && (
-              <Badge variant="warning">Kite connection required</Badge>
-            )}
-          </div>
-
-          {quoteSummary.total === 0 ? (
-            <p className="mt-1 text-xs text-slate-500">
-              Add an instrument to load quotes.
-            </p>
-          ) : fetchedAt === null ? (
-            <p className="mt-1 text-xs text-slate-500">
-              {quotesLoading ? "Loading quotes…" : "Quotes not loaded yet."}
-            </p>
-          ) : (
-            <>
-              <p className="mt-1 text-xs tabular-nums text-slate-300">
-                {displayState === "stale" ? "Last successful refresh " : "Updated "}
-                {formatDateTimeIst(fetchedAt)} IST
+      <div className="border-t border-[var(--ds-border)] bg-[var(--ds-gold-50)]/45 px-5 py-4 sm:px-6">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[var(--ds-text-muted)]">
+                Quote freshness
               </p>
-              <div className="mt-1 flex flex-wrap gap-1.5 text-[10px]">
-                {quoteSummary.live > 0 && (
-                  <span className="text-emerald-400">
-                    {quoteSummary.live} live
-                  </span>
-                )}
-                {quoteSummary.delayed > 0 && (
-                  <span className="text-amber-400">
-                    {quoteSummary.delayed} delayed
-                  </span>
-                )}
-                {quoteSummary.lastClose > 0 && (
-                  <span className="text-blue-400">
-                    {quoteSummary.lastClose} last close
-                  </span>
-                )}
-                {quoteSummary.unavailable > 0 && (
-                  <span className="text-slate-500">
-                    {quoteSummary.unavailable} unavailable
-                  </span>
-                )}
-              </div>
-            </>
-          )}
-
-          {quoteError && (
-            <p
-              role="status"
-              className="mt-1.5 text-[11px] leading-relaxed text-amber-400"
-            >
-              {quoteError}
-              {cooldownSecondsLeft > 0
-                ? ` Retry in ${cooldownSecondsLeft}s.`
-                : ""}{" "}
-              Your board data is unaffected.
+              {stateLabel && (
+                <Badge
+                  variant="warning"
+                  className="border-[var(--ds-gold-300)] bg-[var(--ds-warning-soft)] px-2 py-0.5 text-[10px] text-[var(--ds-warning)]"
+                >
+                  {stateLabel}
+                </Badge>
+              )}
+            </div>
+            <p className="mt-1.5 text-xs tabular-nums text-[var(--ds-text-secondary)]">
+              {quoteSummary.total === 0
+                ? "Add an instrument to load quotes."
+                : fetchedAt === null
+                  ? quotesLoading
+                    ? "Loading quotes…"
+                    : "Quotes not loaded yet."
+                  : `${displayState === "stale" ? "Last successful refresh" : "Updated"} ${formatDateTimeIst(fetchedAt)} IST`}
             </p>
-          )}
-        </div>
-      </div>
+            {quoteError && (
+              <p role="status" className="mt-1.5 text-[11px] leading-relaxed text-[var(--ds-warning)]">
+                {quoteError}
+                {cooldownSecondsLeft > 0 ? ` Retry in ${cooldownSecondsLeft}s.` : ""}{" "}
+                Your board data is unaffected.
+              </p>
+            )}
+          </div>
 
-      <p className="mt-2 text-[10px] text-slate-600">
-        Market session, quote freshness and scanner coverage freshness are
-        separate signals. Quotes refresh automatically every 30 seconds while
-        this page is active.
-      </p>
+          <dl className="grid grid-cols-4 divide-x divide-[var(--ds-border)] rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] py-2.5">
+            {[
+              { label: "Live", value: quoteSummary.live, tone: "var(--ds-positive)" },
+              { label: "Delayed", value: quoteSummary.delayed, tone: "var(--ds-warning)" },
+              { label: "Last close", value: quoteSummary.lastClose, tone: "var(--ds-info)" },
+              { label: "Unavailable", value: quoteSummary.unavailable, tone: "var(--ds-text-muted)" },
+            ].map((stat) => (
+              <div key={stat.label} className="min-w-0 px-3 text-center sm:px-4">
+                <dt className="truncate text-[9px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
+                  {stat.label}
+                </dt>
+                <dd className="ds-mono mt-1 text-base font-semibold" style={{ color: stat.tone }}>
+                  {formatCount(stat.value)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+        <p className="mt-3 text-[10px] leading-relaxed text-[var(--ds-text-muted)]">
+          Market session, quote freshness and scanner coverage freshness are separate signals.
+          Quotes refresh automatically every 30 seconds while this page is active.
+        </p>
+      </div>
     </section>
   );
 }

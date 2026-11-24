@@ -460,7 +460,7 @@ beforeEach(() => {
 });
 
 async function mount() {
-  render(<LiveTradeWorkspace authMarket={null} brokerConnected />);
+  render(<LiveTradeWorkspace brokerConnected />);
   await flush();
 }
 

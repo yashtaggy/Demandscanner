@@ -35,12 +35,19 @@ export function ConfirmDialog({
       closeDisabled={pending}
       footer={
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={onCancel} disabled={pending}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ds-lt-button-ghost"
+            onClick={onCancel}
+            disabled={pending}
+          >
             {cancelLabel}
           </Button>
           <Button
             variant={destructive ? "danger" : "primary"}
             size="sm"
+            className={destructive ? "ds-lt-button-danger" : "ds-lt-button-primary"}
             onClick={onConfirm}
             loading={pending}
           >
@@ -49,7 +56,7 @@ export function ConfirmDialog({
         </div>
       }
     >
-      <p className="text-sm leading-relaxed text-slate-400">{description}</p>
+      <p className="text-sm leading-relaxed text-[var(--ds-text-secondary)]">{description}</p>
     </Modal>
   );
 }

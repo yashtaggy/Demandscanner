@@ -23,15 +23,15 @@ export const PRIORITY_META: Record<
 > = {
   HIGH: {
     label: "High",
-    className: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300",
+    className: "border-[var(--ds-gold-300)] bg-[var(--ds-gold-50)] text-[var(--ds-gold-700)]",
   },
   MEDIUM: {
     label: "Medium",
-    className: "border-indigo-500/30 bg-indigo-500/10 text-indigo-300",
+    className: "border-[var(--ds-info)]/25 bg-[var(--ds-info-soft)] text-[var(--ds-info)]",
   },
   LOW: {
     label: "Low",
-    className: "border-slate-600/50 bg-slate-700/40 text-slate-300",
+    className: "border-[var(--ds-border)] bg-[var(--ds-surface-subtle)] text-[var(--ds-text-secondary)]",
   },
 };
 
@@ -59,10 +59,10 @@ export const LIFECYCLE_LABEL: Record<LifecycleState, string> = {
 
 export const LIFECYCLE_CLASS: Record<LifecycleState, string> = {
   CONFIRMED_FRESH:
-    "border-emerald-400/25 bg-emerald-400/10 text-emerald-400",
-  TOUCHED_ONCE: "border-amber-400/25 bg-amber-400/10 text-amber-400",
-  RETESTED: "border-orange-400/25 bg-orange-400/10 text-orange-400",
-  BROKEN: "border-rose-500/20 bg-rose-500/5 text-rose-400",
+    "border-[var(--ds-positive)]/25 bg-[var(--ds-positive-soft)] text-[var(--ds-positive)]",
+  TOUCHED_ONCE: "border-[var(--ds-warning)]/25 bg-[var(--ds-warning-soft)] text-[var(--ds-warning)]",
+  RETESTED: "border-[var(--ds-gold-300)] bg-[var(--ds-gold-50)] text-[var(--ds-gold-700)]",
+  BROKEN: "border-[var(--ds-negative)]/20 bg-[var(--ds-negative-soft)] text-[var(--ds-negative)]",
 };
 
 export const SIDE_META: Record<
@@ -71,15 +71,15 @@ export const SIDE_META: Record<
 > = {
   DEMAND: {
     label: "Demand",
-    text: "text-emerald-400",
-    dot: "bg-emerald-400",
-    border: "border-emerald-500/25",
+    text: "text-[var(--ds-positive)]",
+    dot: "bg-[var(--ds-positive)]",
+    border: "border-[var(--ds-positive)]/25",
   },
   SUPPLY: {
     label: "Supply",
-    text: "text-rose-400",
-    dot: "bg-rose-400",
-    border: "border-rose-500/25",
+    text: "text-[var(--ds-negative)]",
+    dot: "bg-[var(--ds-negative)]",
+    border: "border-[var(--ds-negative)]/25",
   },
 };
 
@@ -184,9 +184,9 @@ export function formatCount(value: number): string {
 }
 
 export function scoreTextClass(score: number): string {
-  if (score >= 70) return "text-emerald-400";
-  if (score >= 45) return "text-amber-400";
-  return "text-slate-300";
+  if (score >= 70) return "text-[var(--ds-positive)]";
+  if (score >= 45) return "text-[var(--ds-warning)]";
+  return "text-[var(--ds-text-secondary)]";
 }
 
 export const COVERAGE_ORDER: LiveTradeZoneCoverage[] = [

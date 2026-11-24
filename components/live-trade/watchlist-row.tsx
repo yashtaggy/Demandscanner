@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { ChevronDown, ChevronUp, Layers3, Pencil, Trash2 } from "lucide-react";
 import type {
   LiveTradeGroupDto,
   LiveTradeItemDto,
@@ -67,11 +68,11 @@ function IconButton({
       aria-label={label}
       title={label}
       className={cn(
-        "rounded-md border border-slate-700/50 bg-slate-800/40 p-1.5 transition-colors",
+        "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border transition-colors",
         "disabled:cursor-not-allowed disabled:opacity-30",
         tone === "danger"
-          ? "text-rose-400 hover:bg-rose-500/10 hover:text-rose-300"
-          : "text-slate-400 hover:bg-slate-700/50 hover:text-slate-200"
+          ? "border-[var(--ds-negative)]/20 bg-[var(--ds-negative-soft)] text-[var(--ds-negative)] hover:bg-[var(--ds-negative)]/10"
+          : "border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] text-[var(--ds-text-muted)] hover:bg-[var(--ds-gold-50)] hover:text-[var(--ds-text)]"
       )}
     >
       {children}
@@ -82,13 +83,13 @@ function IconButton({
 function PlanValue({ label, value }: { label: string; value: number | null }) {
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-wider text-slate-600">
+      <p className="text-[9px] font-semibold uppercase tracking-wider text-[var(--ds-text-muted)]">
         {label}
       </p>
       <p
         className={cn(
-          "tabular-nums",
-          value === null ? "text-xs text-slate-600" : "text-sm text-slate-200"
+          "ds-mono mt-1 text-[12px] font-semibold",
+          value === null ? "text-[10px] font-normal text-[var(--ds-text-muted)]" : "text-[var(--ds-text)]"
         )}
       >
         {value === null ? "Not set" : formatPrice(value)}
@@ -129,18 +130,18 @@ function WatchlistRowComponent({
       aria-busy={busy}
       data-testid={`watchlist-item-${item.itemId}`}
       data-symbol={item.symbol}
-      className="rounded-xl border border-slate-700/50 bg-slate-800/30 transition-colors hover:border-slate-600/60"
+      className="rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)] shadow-[var(--ds-shadow-card)] transition-colors hover:border-[var(--ds-border-strong)]"
     >
-      <div className="flex flex-col gap-3 p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 space-y-1.5">
+      <div className="flex flex-col gap-4 p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-mono text-sm font-bold text-slate-100">
+              <span className="ds-mono text-[16px] font-bold tracking-tight text-[var(--ds-text)]">
                 {item.symbol}
               </span>
               {entryNumber !== null && (
                 <span
-                  className="rounded border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 font-mono text-[10px] font-medium text-indigo-300"
+                  className="rounded-md border border-[var(--ds-gold-300)] bg-[var(--ds-gold-50)] px-1.5 py-0.5 font-mono text-[10px] font-bold text-[var(--ds-gold-700)]"
                   title={`Entry ${entryNumber} for ${item.symbol}`}
                 >
                   #{entryNumber}
@@ -148,7 +149,7 @@ function WatchlistRowComponent({
               )}
               <span
                 className={cn(
-                  "rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                  "rounded-full border px-2 py-0.5 text-[9.5px] font-bold",
                   priority.className
                 )}
               >
@@ -157,101 +158,86 @@ function WatchlistRowComponent({
               {item.direction && (
                 <span
                   className={cn(
-                    "rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                    "rounded-full border px-2 py-0.5 text-[9.5px] font-bold",
                     item.direction === "BUY"
-                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                      : "border-rose-500/30 bg-rose-500/10 text-rose-400"
+                      ? "border-[var(--ds-positive)]/25 bg-[var(--ds-positive-soft)] text-[var(--ds-positive)]"
+                      : "border-[var(--ds-negative)]/25 bg-[var(--ds-negative-soft)] text-[var(--ds-negative)]"
                   )}
                 >
                   {directionLabel(item.direction)}
                 </span>
               )}
-              <span className="rounded border border-slate-700/50 bg-slate-900/50 px-1.5 py-0.5 text-[10px] text-slate-400">
+              <span className="ds-mono rounded-md border border-[var(--ds-border)] bg-[var(--ds-surface-subtle)] px-1.5 py-0.5 text-[9.5px] font-semibold text-[var(--ds-text-secondary)]">
                 {item.timeframe ?? "Any TF"}
               </span>
-              <span className="text-[10px] text-slate-500">
+              <span className="text-[10px] font-medium text-[var(--ds-text-muted)]">
                 {STATUS_LABEL[item.tradeStatus]}
               </span>
-              {busy && <span className="scanner-spinner text-slate-400" />}
+              {busy && <span className="ds-lt-spinner text-[var(--ds-gold-700)]" role="status" aria-label="Updating trade entry" />}
             </div>
 
-            <p className="truncate text-xs text-slate-500" title={item.companyName ?? undefined}>
+            <p className="truncate text-xs text-[var(--ds-text-secondary)]" title={item.companyName ?? undefined}>
               {item.companyName ?? "Company name unavailable"}
             </p>
 
-            <p className="text-[10px] text-slate-600">
-              Added {formatDateTimeIst(item.createdAt)}
-            </p>
-
-            <label className="flex items-center gap-1.5 text-[10px] text-slate-500">
-              Group
-              <select
-                value={item.groupId ?? ""}
-                disabled={busy}
-                onChange={(event) =>
-                  onMoveGroup(event.target.value === "" ? null : event.target.value)
-                }
-                aria-label={`Move ${entryLabel} to another group`}
-                className="rounded-md border border-slate-700/60 bg-slate-900/70 px-1.5 py-0.5 text-[10px] text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/60 disabled:opacity-50"
-              >
-                <option value="">Ungrouped</option>
-                {groups.map((group) => (
-                  <option key={group.groupId} value={group.groupId}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-              {groupName && (
-                <span className="text-slate-600">· {groupName}</span>
-              )}
-            </label>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <p className="ds-mono text-[9.5px] text-[var(--ds-text-muted)]">
+                Added {formatDateTimeIst(item.createdAt)}
+              </p>
+              <label className="flex items-center gap-1.5 text-[10px] font-semibold text-[var(--ds-text-muted)]">
+                Group
+                <select
+                  value={item.groupId ?? ""}
+                  disabled={busy}
+                  onChange={(event) =>
+                    onMoveGroup(event.target.value === "" ? null : event.target.value)
+                  }
+                  aria-label={`Move ${entryLabel} to another group`}
+                  className="min-h-11 max-w-[180px] rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] px-2 py-1 text-[10px] font-medium text-[var(--ds-text-secondary)] focus:outline-none focus:ring-2 focus:ring-[var(--ds-gold-500)]/40 disabled:opacity-50"
+                >
+                  <option value="">Ungrouped</option>
+                  {groups.map((group) => (
+                    <option key={group.groupId} value={group.groupId}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+                {groupName && (
+                  <span className="font-normal text-[var(--ds-text-muted)]">· {groupName}</span>
+                )}
+              </label>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1.5">
             <IconButton
               label={`Move ${entryLabel} up`}
               onClick={onMoveUp}
               disabled={busy || !canMoveUp}
             >
-              <svg
-                className="h-3.5 w-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <polyline points="18 15 12 9 6 15" />
-              </svg>
+              <ChevronUp className="h-4 w-4" aria-hidden="true" />
             </IconButton>
             <IconButton
               label={`Move ${entryLabel} down`}
               onClick={onMoveDown}
               disabled={busy || !canMoveDown}
             >
-              <svg
-                className="h-3.5 w-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
             </IconButton>
             <button
               type="button"
               onClick={onExpandZones}
-              className="rounded-md border border-slate-700/50 bg-slate-800/40 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700/50"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] px-3 text-[11px] font-semibold text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-gold-50)] hover:text-[var(--ds-text)]"
             >
+              <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />
               Zones
             </button>
             <button
               type="button"
               onClick={onEdit}
-              className="rounded-md border border-slate-700/50 bg-slate-800/40 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700/50"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[var(--ds-gold-300)] bg-[var(--ds-gold-50)] px-3 text-[11px] font-bold text-[var(--ds-gold-700)] transition-colors hover:bg-[var(--ds-gold-100)]"
             >
+              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
               Edit
             </button>
             <IconButton
@@ -259,26 +245,14 @@ function WatchlistRowComponent({
               onClick={onDelete}
               tone="danger"
             >
-              <svg
-                className="h-3.5 w-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                aria-hidden="true"
-              >
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-                <path d="M10 11v6M14 11v6" />
-                <path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2" />
-              </svg>
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
             </IconButton>
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,0.95fr)_minmax(0,1.6fr)]">
-          <section aria-label="Trade plan" className="space-y-1.5">
-            <p className="text-[10px] uppercase tracking-wider text-slate-600">
+        <div className="ds-lt-row-grid border-t border-[var(--ds-border)] pt-4">
+          <section aria-label="Trade plan" className="space-y-2.5">
+            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--ds-text-muted)]">
               Trade plan
             </p>
             <div className="grid grid-cols-3 gap-2">
@@ -286,13 +260,13 @@ function WatchlistRowComponent({
               <PlanValue label="Target" value={item.targetPrice} />
               <PlanValue label="Stop" value={item.stopLoss} />
             </div>
-            <p className="text-[10px] text-slate-600">
+            <p className="text-[9.5px] leading-relaxed text-[var(--ds-text-muted)]">
               Planned levels only — not an order or a recommendation.
             </p>
           </section>
 
-          <section aria-label="Latest quote" className="space-y-1.5">
-            <p className="text-[10px] uppercase tracking-wider text-slate-600">
+          <section aria-label="Latest quote" className="space-y-2.5">
+            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--ds-text-muted)]">
               Latest quote
             </p>
             <QuoteDisplay
@@ -303,7 +277,7 @@ function WatchlistRowComponent({
             />
           </section>
 
-          <section aria-label="Demand and supply zones">
+          <section aria-label="Demand and supply zones" className="ds-lt-row-zone">
             <ZoneSummary
               summary={summary}
               quote={quote}
@@ -316,11 +290,11 @@ function WatchlistRowComponent({
         </div>
 
         {item.notes.trim() !== "" && (
-          <details className="border-t border-slate-700/40 pt-2">
-            <summary className="cursor-pointer select-none text-[11px] text-slate-500 hover:text-slate-300">
+          <details className="border-t border-[var(--ds-border)] pt-2">
+            <summary className="flex min-h-11 cursor-pointer select-none items-center text-[11px] font-semibold text-[var(--ds-text-secondary)] hover:text-[var(--ds-text)]">
               Notes
             </summary>
-            <p className="mt-1 whitespace-pre-wrap text-xs leading-relaxed text-slate-400">
+            <p className="mb-1 whitespace-pre-wrap rounded-lg bg-[var(--ds-gold-50)]/60 px-3 py-2.5 text-xs leading-relaxed text-[var(--ds-text-secondary)]">
               {item.notes}
             </p>
           </details>
