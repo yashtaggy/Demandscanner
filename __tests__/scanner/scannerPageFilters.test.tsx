@@ -67,7 +67,9 @@ jest.mock('@/hooks/use-scanner-job', () => ({
   }),
 }));
 
-jest.mock('@/components/header', () => ({ Header: () => null }));
+jest.mock('@/components/overview/app-shell', () => ({
+  OverviewShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 jest.mock('@/components/scanner/ScanProgress', () => ({
   ScanProgress: () => null,
 }));

@@ -22,7 +22,9 @@ jest.mock("@/hooks/use-subscription", () => ({
   useSubscription: () => mockSubscription(),
 }));
 
-jest.mock("@/components/header", () => ({ Header: () => null }));
+jest.mock("@/components/overview/app-shell", () => ({
+  OverviewShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 jest.mock("@/components/summary-cards", () => ({
   SummaryCards: () => <div>Summary cards</div>,
 }));

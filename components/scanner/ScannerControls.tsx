@@ -1,9 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { Pattern, Timeframe, ZoneSide } from "@/lib/scanner/types";
+import { cn } from "@/lib/utils";
 import { DEFAULT_SCANNER_FILTERS, type ZoneFilters } from "@/hooks/use-zones";
+import {
+  LIFECYCLES,
+  LIFECYCLE_LABELS,
+  PATTERNS,
+  SIDES,
+  SORT_OPTIONS,
+  TF_LABELS,
+  TIMEFRAMES,
+} from "./filter-options";
+import { FilterChip } from "./filter-chip";
 
 interface ScannerControlsProps {
   filters: ZoneFilters;
@@ -17,33 +28,24 @@ interface ScannerControlsProps {
   isAuthenticated: boolean;
   /** Symbol currently in the symbol filter — scopes the scan when set. */
   runSymbol?: string;
+  /**
+   * Groups score, sort and advanced filters into sections that start collapsed
+   * and expand independently. Primary filters stay visible. Defaults to false
+   * so the standalone Scanner page keeps its existing layout.
+   */
+  collapsibleSections?: boolean;
+  /** Light presentation tokens for the Overview panel. */
+  variant?: "dark" | "light";
 }
-
-const TIMEFRAMES: Array<Timeframe | "ALL"> = ["ALL", "1H", "4H", "1D", "1W", "1M", "3M", "6M", "1Y"];
-const TF_LABELS: Record<string, string> = {
-  ALL: "All", "1H": "1H", "4H": "4H", "1D": "1D", "1W": "1W", "1M": "1M", "3M": "3M", "6M": "6M", "1Y": "1Y",
-};
-
-const SIDES: Array<ZoneSide | "ALL"> = ["ALL", "DEMAND", "SUPPLY"];
-const PATTERNS: Array<Pattern | "ALL"> = ["ALL", "DBR", "RBR", "RBD", "DBD"];
-const LIFECYCLES = ["ALL", "CONFIRMED_FRESH", "TOUCHED_ONCE", "RETESTED", "BROKEN"] as const;
-const LIFECYCLE_LABELS: Record<string, string> = {
-  ALL: "All", CONFIRMED_FRESH: "Fresh", TOUCHED_ONCE: "Tested", RETESTED: "Retested", BROKEN: "Broken",
-};
-
-const SORT_OPTIONS: Array<{ value: NonNullable<ZoneFilters["sort"]>; label: string }> = [
-  { value: "composite_score", label: "Composite Score" },
-  { value: "score",           label: "Formation Score" },
-  { value: "distance_pct",    label: "Distance %" },
-  { value: "formation_ts",    label: "Formation Date" },
-];
 
 export function ScannerControls({
   filters, onFiltersChange, onResetFilters, onRunScan, onRefreshZones,
   isRunning, launching, isAuthenticated, runSymbol,
+  collapsibleSections = false, variant = "dark",
 }: ScannerControlsProps) {
   const busy = isRunning || launching;
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const isLight = variant === "light";
 
   function set(patch: Partial<ZoneFilters>) {
     onFiltersChange({ ...filters, ...patch, offset: 0 });
@@ -58,7 +60,7 @@ export function ScannerControls({
   const dirValue        = filters.dir ?? DEFAULT_SCANNER_FILTERS.dir;
 
   return (
-    <div className="space-y-4">
+    <div className={cn("space-y-4", isLight && "ds-scanner-light")}>
       {/* ── Run / Refresh ──────────────────────────────────────────────── */}
       <div className="flex gap-2">
         <Button id="run-scan-btn" variant="primary" size="sm"
@@ -138,6 +140,7 @@ export function ScannerControls({
           {SIDES.map((s) => (
             <FilterChip key={s} id={`side-${s}`} active={activeSide === s}
               onClick={() => set({ side: s === "ALL" ? undefined : s })}
+              tone={s === "DEMAND" ? "positive" : s === "SUPPLY" ? "negative" : undefined}
               colorClass={
                 s === "DEMAND" ? "data-[active=true]:border-emerald-500/50 data-[active=true]:bg-emerald-500/15 data-[active=true]:text-emerald-300"
                   : s === "SUPPLY" ? "data-[active=true]:border-rose-500/50 data-[active=true]:bg-rose-500/15 data-[active=true]:text-rose-300"
@@ -176,50 +179,55 @@ export function ScannerControls({
         </div>
       </FilterGroup>
 
-      {/* ── Formation score ────────────────────────────────────────────── */}
-      <FilterGroup label={`Formation Score ≥ ${minScore}`}>
-        <input id="min-score-slider" type="range" min={0} max={100} step={5}
-          value={minScore}
-          onChange={(e) => set({ minScore: Number(e.target.value) })}
-          className="w-full h-1.5 rounded-full accent-indigo-500 cursor-pointer"
-        />
-        <div className="flex justify-between text-xs text-slate-600 mt-0.5">
-          <span>0</span><span>50</span><span>100</span>
-        </div>
-      </FilterGroup>
+      <Section label="Score thresholds" collapsible={collapsibleSections}>
+        {/* ── Formation score ────────────────────────────────────────────── */}
+        <FilterGroup label={`Formation Score ≥ ${minScore}`}>
+          <input id="min-score-slider" type="range" min={0} max={100} step={5}
+            value={minScore}
+            onChange={(e) => set({ minScore: Number(e.target.value) })}
+            className="w-full h-1.5 rounded-full accent-indigo-500 cursor-pointer"
+          />
+          <div className="flex justify-between text-xs text-slate-600 mt-0.5">
+            <span>0</span><span>50</span><span>100</span>
+          </div>
+        </FilterGroup>
 
-      {/* ── Composite score ────────────────────────────────────────────── */}
-      <FilterGroup label={`Composite Score ≥ ${filters.minCompositeScore ?? 0}`}>
-        <input id="min-composite-slider" type="range" min={0} max={100} step={5}
-          value={filters.minCompositeScore ?? 0}
-          onChange={(e) => set({ minCompositeScore: Number(e.target.value) || undefined })}
-          className="w-full h-1.5 rounded-full accent-violet-500 cursor-pointer"
-        />
-        <div className="flex justify-between text-xs text-slate-600 mt-0.5">
-          <span>0</span><span>50</span><span>100</span>
-        </div>
-      </FilterGroup>
+        {/* ── Composite score ────────────────────────────────────────────── */}
+        <FilterGroup label={`Composite Score ≥ ${filters.minCompositeScore ?? 0}`}>
+          <input id="min-composite-slider" type="range" min={0} max={100} step={5}
+            value={filters.minCompositeScore ?? 0}
+            onChange={(e) => set({ minCompositeScore: Number(e.target.value) || undefined })}
+            className="w-full h-1.5 rounded-full accent-violet-500 cursor-pointer"
+          />
+          <div className="flex justify-between text-xs text-slate-600 mt-0.5">
+            <span>0</span><span>50</span><span>100</span>
+          </div>
+        </FilterGroup>
+      </Section>
 
-      {/* ── Sort ─────────────────────────────────────────────────────── */}
-      <FilterGroup label="Sort By">
-        <select
-          id="sort-select"
-          value={sortValue}
-          onChange={(e) => set({ sort: e.target.value as ZoneFilters["sort"] })}
-          className="w-full rounded-md border border-slate-700/50 bg-slate-800/60 px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
-        >
-          {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <div className="flex gap-1 mt-1.5">
-          <FilterChip id="dir-desc" active={dirValue === "desc"} onClick={() => set({ dir: "desc" })}>↓ Desc</FilterChip>
-          <FilterChip id="dir-asc"  active={dirValue === "asc"}  onClick={() => set({ dir: "asc" })}>↑ Asc</FilterChip>
-        </div>
-      </FilterGroup>
+      <Section label="Sort" collapsible={collapsibleSections}>
+        {/* ── Sort ─────────────────────────────────────────────────────── */}
+        <FilterGroup label="Sort By">
+          <select
+            id="sort-select"
+            value={sortValue}
+            onChange={(e) => set({ sort: e.target.value as ZoneFilters["sort"] })}
+            className="w-full rounded-md border border-slate-700/50 bg-slate-800/60 px-2 py-1.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-indigo-500/50"
+          >
+            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <div className="flex gap-1 mt-1.5">
+            <FilterChip id="dir-desc" active={dirValue === "desc"} onClick={() => set({ dir: "desc" })}>↓ Desc</FilterChip>
+            <FilterChip id="dir-asc"  active={dirValue === "asc"}  onClick={() => set({ dir: "asc" })}>↑ Asc</FilterChip>
+          </div>
+        </FilterGroup>
+      </Section>
 
       {/* ── Advanced toggle ─────────────────────────────────────────── */}
       <button
         onClick={() => setShowAdvanced((v) => !v)}
-        className="w-full text-left text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
+        aria-expanded={showAdvanced}
+        className="scanner-section-toggle w-full text-left text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
       >
         <span className={`transition-transform ${showAdvanced ? "rotate-90" : ""}`}>▶</span>
         Advanced Filters
@@ -298,29 +306,59 @@ export function ScannerControls({
 
 // ─── Shared subcomponents ──────────────────────────────────────────────────────
 
-function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({
+  label,
+  collapsible,
+  children,
+}: {
+  label: string;
+  collapsible: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (!collapsible) return <>{children}</>;
+
   return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
-      {children}
+    <div
+      className="overflow-hidden rounded-xl border"
+      style={{ borderColor: "var(--ds-border)", background: "var(--ds-surface-elevated)" }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:bg-[var(--ds-gold-50)]"
+      >
+        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--ds-text-secondary)]">
+          {label}
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 text-[var(--ds-text-muted)] transition-transform duration-200",
+            open && "rotate-180"
+          )}
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
+      </button>
+      {open && (
+        <div
+          className="space-y-4 border-t px-3 py-3"
+          style={{ borderColor: "var(--ds-border)" }}
+        >
+          {children}
+        </div>
+      )}
     </div>
   );
 }
 
-function FilterChip({
-  id, active, onClick, children, colorClass = "",
-}: {
-  id: string; active: boolean; onClick: () => void;
-  children: React.ReactNode; colorClass?: string;
-}) {
-  const base = "px-2.5 py-1 text-xs rounded-md border transition-all duration-150 cursor-pointer";
-  const inactive = "border-slate-700/50 bg-slate-800/40 text-slate-500 hover:text-slate-300 hover:border-slate-600/60";
-  const activeDefault = "border-indigo-500/50 bg-indigo-500/15 text-indigo-300";
+function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <button id={id} data-active={active} onClick={onClick}
-      className={`${base} ${active ? (colorClass || activeDefault) : inactive} ${colorClass}`}
-    >
+    <div className="space-y-1.5">
+      <p className="scanner-label text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
       {children}
-    </button>
+    </div>
   );
 }

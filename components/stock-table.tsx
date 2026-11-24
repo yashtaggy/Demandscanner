@@ -1,8 +1,19 @@
 "use client";
 
-import { cn, formatINR, formatVolume, formatPercent, formatDateTime, changeColor } from "@/lib/utils";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ArrowUpRight,
+  ArrowDownRight,
+  ChevronLeft,
+  ChevronRight,
+  RefreshCw,
+  SearchX,
+  TriangleAlert,
+} from "lucide-react";
+import { cn, formatINR, formatVolume, formatPercent, formatDateTime } from "@/lib/utils";
 import { StockTableSkeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import type { StockRow } from "@/lib/types";
 
 // ─── Column definitions ───────────────────────────────────────────────────────
@@ -13,18 +24,30 @@ interface Column {
   key: SortField | "name" | "lastUpdated";
   label: string;
   sortable: boolean;
+  align: "left" | "right";
   className: string;
-  headerClassName?: string;
 }
 
 const COLUMNS: Column[] = [
-  { key: "symbol", label: "Symbol", sortable: true, className: "w-28", headerClassName: "text-left" },
-  { key: "name", label: "Company", sortable: false, className: "min-w-0 flex-1", headerClassName: "text-left" },
-  { key: "price", label: "LTP", sortable: true, className: "w-28 text-right", headerClassName: "text-right" },
-  { key: "change", label: "Change", sortable: true, className: "w-28 text-right", headerClassName: "text-right" },
-  { key: "changePercent", label: "% Change", sortable: true, className: "w-28 text-right", headerClassName: "text-right" },
-  { key: "volume", label: "Volume", sortable: true, className: "w-28 text-right hidden lg:table-cell", headerClassName: "text-right hidden lg:table-cell" },
-  { key: "lastUpdated", label: "Updated", sortable: false, className: "w-28 text-right hidden xl:table-cell", headerClassName: "text-right hidden xl:table-cell" },
+  { key: "symbol", label: "Symbol", sortable: true, align: "left", className: "w-[108px]" },
+  { key: "name", label: "Company", sortable: false, align: "left", className: "min-w-0" },
+  { key: "price", label: "LTP", sortable: true, align: "right", className: "w-[104px]" },
+  { key: "change", label: "Change", sortable: true, align: "right", className: "w-[104px]" },
+  { key: "changePercent", label: "% Change", sortable: true, align: "right", className: "w-[112px]" },
+  {
+    key: "volume",
+    label: "Volume",
+    sortable: true,
+    align: "right",
+    className: "hidden w-[112px] lg:table-cell",
+  },
+  {
+    key: "lastUpdated",
+    label: "Updated",
+    sortable: false,
+    align: "right",
+    className: "hidden w-[120px] xl:table-cell",
+  },
 ];
 
 // ─── Sort icon ────────────────────────────────────────────────────────────────
@@ -36,19 +59,17 @@ function SortIcon({ field, currentSort, currentOrder }: {
 }) {
   if (field !== currentSort) {
     return (
-      <svg className="h-3 w-3 text-slate-600" viewBox="0 0 16 16" fill="currentColor">
-        <path d="M5 8l3-5 3 5H5zm0 0l3 5 3-5H5z" />
-      </svg>
+      <ArrowUpDown
+        className="h-3 w-3 text-[var(--ds-text-muted)] opacity-60 transition-opacity group-hover:opacity-100"
+        strokeWidth={2}
+        aria-hidden="true"
+      />
     );
   }
   return currentOrder === "asc" ? (
-    <svg className="h-3 w-3 text-indigo-400" viewBox="0 0 16 16" fill="currentColor">
-      <path d="M8 4l-4 6h8L8 4z" />
-    </svg>
+    <ArrowUp className="h-3 w-3 text-[var(--ds-gold-700)]" strokeWidth={2.5} aria-hidden="true" />
   ) : (
-    <svg className="h-3 w-3 text-indigo-400" viewBox="0 0 16 16" fill="currentColor">
-      <path d="M8 12l4-6H4l4 6z" />
-    </svg>
+    <ArrowDown className="h-3 w-3 text-[var(--ds-gold-700)]" strokeWidth={2.5} aria-hidden="true" />
   );
 }
 
@@ -86,31 +107,35 @@ export function StockTable({
   onPageChange,
 }: StockTableProps) {
   if (loading && stocks.length === 0) {
-    return (
-      <div className="space-y-2">
-        <StockTableSkeleton rows={12} />
-      </div>
-    );
+    return <StockTableSkeleton rows={12} />;
   }
 
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/15">
-          <svg className="h-6 w-6 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
+      <div
+        className="flex flex-col items-center justify-center gap-4 rounded-2xl border px-6 py-20 text-center"
+        style={{ borderColor: "var(--ds-border)", background: "var(--ds-surface)" }}
+      >
+        <div
+          className="flex h-12 w-12 items-center justify-center rounded-full"
+          style={{ background: "var(--ds-negative-soft)", color: "var(--ds-negative)" }}
+        >
+          <TriangleAlert className="h-6 w-6" strokeWidth={1.75} aria-hidden="true" />
         </div>
         <div>
-          <p className="text-sm font-medium text-slate-200">Failed to load stocks</p>
-          <p className="text-xs text-slate-500 mt-1">{error}</p>
+          <p className="text-sm font-semibold text-[var(--ds-text)]">Failed to load stocks</p>
+          <p className="mt-1 text-xs text-[var(--ds-text-muted)]">{error}</p>
         </div>
         {onRetry && (
-          <Button variant="secondary" size="sm" onClick={onRetry} id="retry-button">
+          <button
+            type="button"
+            onClick={onRetry}
+            id="retry-button"
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[var(--ds-border-strong)] bg-[var(--ds-surface-elevated)] px-3.5 text-xs font-semibold text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-surface-subtle)]"
+          >
+            <RefreshCw className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
             Try again
-          </Button>
+          </button>
         )}
       </div>
     );
@@ -118,13 +143,19 @@ export function StockTable({
 
   if (!loading && stocks.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-700/50">
-          <svg className="h-6 w-6 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 15.803a7.5 7.5 0 0010.607 0z" />
-          </svg>
+      <div
+        className="flex flex-col items-center justify-center gap-3 rounded-2xl border px-6 py-20 text-center"
+        style={{ borderColor: "var(--ds-border)", background: "var(--ds-surface)" }}
+      >
+        <div
+          className="flex h-12 w-12 items-center justify-center rounded-full"
+          style={{ background: "var(--ds-surface-subtle)", color: "var(--ds-text-muted)" }}
+        >
+          <SearchX className="h-6 w-6" strokeWidth={1.5} aria-hidden="true" />
         </div>
-        <p className="text-sm text-slate-500">No stocks match the current filters.</p>
+        <p className="text-sm text-[var(--ds-text-secondary)]">
+          No stocks match the current filters.
+        </p>
       </div>
     );
   }
@@ -138,46 +169,85 @@ export function StockTable({
     <div className="space-y-3">
       {/* Loading overlay when refreshing with existing data */}
       {loading && stocks.length > 0 && (
-        <div className="flex items-center gap-2 text-xs text-slate-500">
-          <svg className="h-3 w-3 animate-spin text-indigo-400" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
+        <div className="flex items-center gap-2 text-xs text-[var(--ds-text-muted)]" role="status">
+          <RefreshCw className="h-3 w-3 animate-spin" strokeWidth={2.5} aria-hidden="true" />
           Refreshing…
         </div>
       )}
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-slate-700/50">
-        <table className="w-full text-sm" id="stock-table">
-          <thead>
-            <tr className="border-b border-slate-700/50 bg-slate-800/80">
-              {COLUMNS.map((col) => (
-                <th
-                  key={col.key}
-                  className={cn(
-                    "px-4 py-3 font-medium text-slate-400 text-xs uppercase tracking-wider select-none",
-                    col.headerClassName,
-                    col.sortable && "cursor-pointer hover:text-slate-200 transition-colors"
-                  )}
-                  onClick={() => handleColumnClick(col)}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    {col.label}
-                    {col.sortable && col.key !== "name" && col.key !== "lastUpdated" && (
-                      <SortIcon field={col.key} currentSort={sort} currentOrder={order} />
+      <div
+        className="overflow-x-auto rounded-2xl border lg:max-h-[64vh] lg:overflow-y-auto"
+        style={{
+          borderColor: "var(--ds-border)",
+          background: "var(--ds-surface)",
+          boxShadow: "var(--ds-shadow-card)",
+        }}
+      >
+        <table className="w-full min-w-[640px] border-collapse text-sm" id="stock-table">
+          <caption className="sr-only">
+            Nifty 500 instruments with latest price, change and volume
+          </caption>
+          <thead className="sticky top-0 z-10">
+            <tr
+              className="border-b"
+              style={{
+                borderColor: "var(--ds-border)",
+                background: "var(--ds-surface-elevated)",
+              }}
+            >
+              {COLUMNS.map((col) => {
+                const isActive = sort === col.key;
+                return (
+                  <th
+                    key={col.key}
+                    scope="col"
+                    aria-sort={
+                      col.sortable
+                        ? isActive
+                          ? order === "asc"
+                            ? "ascending"
+                            : "descending"
+                          : "none"
+                        : undefined
+                    }
+                    className={cn(
+                      "px-3 py-2.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--ds-text-muted)] select-none first:pl-4 last:pr-4 sm:px-4",
+                      col.className
                     )}
-                  </span>
-                </th>
-              ))}
+                  >
+                    {col.sortable ? (
+                      <button
+                        type="button"
+                        onClick={() => handleColumnClick(col)}
+                        className={cn(
+                          "group inline-flex items-center gap-1 rounded-md text-[10.5px] font-semibold uppercase tracking-[0.08em] transition-colors hover:text-[var(--ds-text)]",
+                          col.align === "right" && "w-full justify-end"
+                        )}
+                      >
+                        {col.label}
+                        <SortIcon field={col.key} currentSort={sort} currentOrder={order} />
+                      </button>
+                    ) : (
+                      <span
+                        className={cn(
+                          "inline-flex w-full",
+                          col.align === "right" && "justify-end"
+                        )}
+                      >
+                        {col.label}
+                      </span>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-700/30">
-            {stocks.map((stock, i) => (
+          <tbody>
+            {stocks.map((stock) => (
               <StockRow
                 key={stock.fullSymbol}
                 stock={stock}
-                index={i}
                 onClick={onRowClick ? () => onRowClick(stock) : undefined}
               />
             ))}
@@ -187,48 +257,85 @@ export function StockTable({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-slate-500 text-xs">
-            {total} stocks · Page {page} of {totalPages}
+        <div className="flex flex-col items-center justify-between gap-2 text-sm sm:flex-row">
+          <span className="ds-mono text-[11px] text-[var(--ds-text-muted)]">
+            {total.toLocaleString("en-IN")} stocks · Page {page} of {totalPages}
           </span>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
+          <nav className="flex items-center gap-1" aria-label="Table pagination">
+            <PageButton
+              id="prev-page-button"
               onClick={() => onPageChange(page - 1)}
               disabled={page <= 1}
-              id="prev-page-button"
+              label="Previous page"
             >
-              ‹ Prev
-            </Button>
+              <ChevronLeft className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              <span className="hidden sm:inline">Prev</span>
+            </PageButton>
             {/* Show nearby page numbers */}
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
               const pageNum = Math.max(1, Math.min(page - 2 + i, totalPages - 4 + i));
               return (
-                <Button
+                <PageButton
                   key={pageNum}
-                  variant={pageNum === page ? "secondary" : "ghost"}
-                  size="sm"
-                  onClick={() => onPageChange(pageNum)}
                   id={`page-${pageNum}-button`}
+                  onClick={() => onPageChange(pageNum)}
+                  active={pageNum === page}
+                  label={`Page ${pageNum}`}
                 >
                   {pageNum}
-                </Button>
+                </PageButton>
               );
             })}
-            <Button
-              variant="ghost"
-              size="sm"
+            <PageButton
+              id="next-page-button"
               onClick={() => onPageChange(page + 1)}
               disabled={page >= totalPages}
-              id="next-page-button"
+              label="Next page"
             >
-              Next ›
-            </Button>
-          </div>
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            </PageButton>
+          </nav>
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Pagination button ────────────────────────────────────────────────────────
+
+function PageButton({
+  active,
+  disabled,
+  onClick,
+  id,
+  label,
+  children,
+}: {
+  active?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  id: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      id={id}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "ds-mono inline-flex h-8 min-w-8 items-center justify-center gap-1 rounded-lg border px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+        active
+          ? "border-transparent bg-[var(--ds-text)] text-[var(--ds-surface)]"
+          : "border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] text-[var(--ds-text-secondary)] hover:border-[var(--ds-border-strong)] hover:text-[var(--ds-text)]"
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -236,21 +343,35 @@ export function StockTable({
 
 function StockRow({
   stock,
-  index,
   onClick,
 }: {
   stock: StockRow;
-  index: number;
   onClick?: () => void;
 }) {
   const isPositive = stock.changePercent > 0;
   const isNegative = stock.changePercent < 0;
 
+  const changeTone = !stock.hasQuote
+    ? "var(--ds-text-muted)"
+    : stock.change > 0
+    ? "var(--ds-positive)"
+    : stock.change < 0
+    ? "var(--ds-negative)"
+    : "var(--ds-text-secondary)";
+
+  const percentTone = !stock.hasQuote
+    ? "var(--ds-text-muted)"
+    : isPositive
+    ? "var(--ds-positive)"
+    : isNegative
+    ? "var(--ds-negative)"
+    : "var(--ds-text-secondary)";
+
   return (
     <tr
       className={cn(
-        "transition-colors duration-100",
-        "hover:bg-slate-700/30",
+        "border-b border-[var(--ds-border)]/60 transition-colors last:border-b-0",
+        "hover:bg-[var(--ds-gold-50)]",
         onClick && "cursor-pointer",
         !stock.hasQuote && "opacity-60"
       )}
@@ -258,39 +379,44 @@ function StockRow({
       id={`stock-row-${stock.symbol}`}
     >
       {/* Symbol */}
-      <td className="px-4 py-3">
+      <td className="px-3 py-2.5 first:pl-4 sm:px-4">
         <div className="flex items-center gap-2">
-          <div
-            className={cn(
-              "h-1.5 w-1.5 rounded-full shrink-0",
-              stock.hasQuote
-                ? isPositive ? "bg-emerald-400" : isNegative ? "bg-rose-400" : "bg-slate-400"
-                : "bg-slate-600"
-            )}
+          <span
+            className="h-1.5 w-1.5 shrink-0 rounded-full"
+            style={{
+              background: stock.hasQuote
+                ? isPositive
+                  ? "var(--ds-positive)"
+                  : isNegative
+                  ? "var(--ds-negative)"
+                  : "var(--ds-text-muted)"
+                : "var(--ds-border-strong)",
+            }}
+            aria-hidden="true"
           />
-          <span className="font-mono font-semibold text-slate-100 text-xs tracking-wide">
+          <span className="ds-mono text-[12px] font-semibold tracking-wide text-[var(--ds-text)]">
             {stock.symbol}
           </span>
         </div>
       </td>
 
       {/* Company name */}
-      <td className="px-4 py-3">
-        <span className="text-slate-400 text-xs truncate max-w-[200px] block">
+      <td className="px-3 py-2.5 sm:px-4">
+        <span className="block max-w-[240px] truncate text-[12.5px] text-[var(--ds-text-secondary)]">
           {stock.name || "—"}
         </span>
       </td>
 
       {/* LTP */}
-      <td className="px-4 py-3 text-right">
-        <span className="font-mono text-slate-100 font-medium tabular-nums">
+      <td className="px-3 py-2.5 text-right sm:px-4">
+        <span className="ds-mono text-[13px] font-medium text-[var(--ds-text)]">
           {stock.hasQuote ? formatINR(stock.lastPrice) : "—"}
         </span>
       </td>
 
       {/* Change */}
-      <td className="px-4 py-3 text-right">
-        <span className={cn("font-mono tabular-nums text-sm", changeColor(stock.change))}>
+      <td className="px-3 py-2.5 text-right sm:px-4">
+        <span className="ds-mono text-[12.5px]" style={{ color: changeTone }}>
           {stock.hasQuote
             ? `${stock.change >= 0 ? "+" : ""}${formatINR(stock.change)}`
             : "—"}
@@ -298,27 +424,36 @@ function StockRow({
       </td>
 
       {/* % Change */}
-      <td className="px-4 py-3 text-right">
+      <td className="px-3 py-2.5 text-right sm:px-4">
         <span
-          className={cn(
-            "inline-flex items-center justify-end gap-1 font-mono tabular-nums text-sm font-medium",
-            changeColor(stock.changePercent)
-          )}
+          className="ds-mono inline-flex items-center justify-end gap-1 text-[12.5px] font-semibold"
+          style={{ color: percentTone }}
         >
-          {stock.hasQuote ? formatPercent(stock.changePercent) : "—"}
+          {stock.hasQuote ? (
+            <>
+              {isPositive ? (
+                <ArrowUpRight className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
+              ) : isNegative ? (
+                <ArrowDownRight className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />
+              ) : null}
+              {formatPercent(stock.changePercent)}
+            </>
+          ) : (
+            "—"
+          )}
         </span>
       </td>
 
       {/* Volume */}
-      <td className="px-4 py-3 text-right hidden lg:table-cell">
-        <span className="font-mono text-slate-400 text-xs tabular-nums">
+      <td className="hidden px-3 py-2.5 text-right sm:px-4 lg:table-cell">
+        <span className="ds-mono text-[12px] text-[var(--ds-text-secondary)]">
           {stock.hasQuote ? formatVolume(stock.volume) : "—"}
         </span>
       </td>
 
       {/* Last updated */}
-      <td className="px-4 py-3 text-right hidden xl:table-cell">
-        <span className="text-slate-600 text-xs">
+      <td className="hidden px-3 py-2.5 text-right sm:px-4 xl:table-cell">
+        <span className="ds-mono text-[11px] text-[var(--ds-text-muted)]">
           {formatDateTime(stock.lastUpdated || undefined)}
         </span>
       </td>

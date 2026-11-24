@@ -3,6 +3,152 @@
 :root {
   --font-geist-sans: "Geist", sans-serif;
   --font-geist-mono: "Geist Mono", monospace;
+
+  /* ── DemandScanner light design tokens ──────────────────────────────
+     Centralised palette for the premium Overview. Dark routes keep their
+     existing utility colours until a dark theme is introduced. */
+  --ds-canvas: #f5f0e5;
+  --ds-surface: #fffcf5;
+  --ds-surface-elevated: #fffdf8;
+  --ds-surface-subtle: #eee7d9;
+  --ds-border: #ded5c4;
+  --ds-border-strong: #c9beaa;
+
+  --ds-text: #292720;
+  --ds-text-secondary: #625d52;
+  --ds-text-muted: #817969;
+
+  --ds-gold-50: #fbf4e3;
+  --ds-gold-100: #f4e5bd;
+  --ds-gold-300: #e5c16f;
+  --ds-gold-500: #d3a12f;
+  --ds-gold-700: #9b6b12;
+
+  --ds-positive: #286b4c;
+  --ds-positive-soft: #e7f1e9;
+  --ds-negative: #b7473e;
+  --ds-negative-soft: #f7e9e5;
+  --ds-info: #426e99;
+  --ds-info-soft: #e7eff7;
+  --ds-warning: #95600f;
+  --ds-warning-soft: #f6eedc;
+
+  --ds-font-sans: var(--font-manrope), "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --ds-font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+
+  --ds-radius-sm: 8px;
+  --ds-radius-md: 12px;
+  --ds-radius-lg: 16px;
+  --ds-shadow-card: 0 1px 2px rgb(41 39 32 / 0.04), 0 6px 18px rgb(41 39 32 / 0.035);
+  --ds-shadow-float: 0 18px 48px rgb(41 39 32 / 0.14);
+}
+
+/* ── Overview shell ─────────────────────────────────────────────────── */
+.ds-app {
+  font-family: var(--ds-font-sans);
+  background: var(--ds-canvas);
+  color: var(--ds-text);
+}
+
+.ds-mono {
+  font-family: var(--ds-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.ds-shell-main {
+  min-height: 100vh;
+  transition: padding-left 200ms ease-out;
+}
+
+@media (min-width: 1024px) {
+  .ds-shell-main {
+    padding-left: var(--ds-sidebar-width, 248px);
+  }
+}
+
+.ds-app :focus-visible {
+  outline: 2px solid var(--ds-gold-500);
+  outline-offset: 2px;
+}
+
+.ds-app ::selection {
+  background: var(--ds-gold-100);
+  color: var(--ds-text);
+}
+
+.ds-app ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.ds-app ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ds-app ::-webkit-scrollbar-thumb {
+  background: var(--ds-border-strong);
+  border-radius: 999px;
+}
+.ds-app ::-webkit-scrollbar-thumb:hover {
+  background: var(--ds-text-muted);
+}
+
+.ds-scroll-shadow {
+  scrollbar-gutter: stable;
+}
+
+.ds-tooltip {
+  pointer-events: none;
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  white-space: nowrap;
+  border-radius: 8px;
+  border: 1px solid var(--ds-border);
+  background: var(--ds-surface-elevated);
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ds-text);
+  box-shadow: var(--ds-shadow-float);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 120ms ease, visibility 120ms ease;
+}
+
+.ds-nav-item:hover .ds-tooltip,
+.ds-nav-item:focus-visible .ds-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+.ds-drawer-enter {
+  animation: ds-slide-in-right 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes ds-slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes ds-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.ds-fade-in {
+  animation: ds-fade-in 180ms ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-drawer-enter,
+  .ds-fade-in,
+  .ds-app * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Smooth scrolling */
@@ -29,6 +175,96 @@ html {
 /* Tabular numbers for financial data */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* ── Overview scanner controls (light presentation) ─────────────── */
+.ds-scanner-light .scanner-label {
+  color: var(--ds-text-secondary);
+}
+
+.ds-scanner-light input[type="text"],
+.ds-scanner-light input[type="date"],
+.ds-scanner-light select {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-elevated);
+  color: var(--ds-text);
+}
+
+.ds-scanner-light input[type="text"]::placeholder {
+  color: var(--ds-text-muted);
+}
+
+.ds-scanner-light input[type="range"] {
+  accent-color: var(--ds-gold-500);
+}
+
+.ds-scanner-light select option {
+  background: var(--ds-surface);
+  color: var(--ds-text);
+}
+
+.ds-scanner-light [data-chip] {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-elevated);
+  color: var(--ds-text-secondary);
+}
+
+.ds-scanner-light [data-chip]:hover {
+  border-color: var(--ds-border-strong);
+  color: var(--ds-text);
+}
+
+.ds-scanner-light [data-chip][data-active="true"] {
+  border-color: var(--ds-gold-500);
+  background: var(--ds-gold-50);
+  color: var(--ds-gold-700);
+}
+
+.ds-scanner-light [data-chip][data-active="true"][data-tone="positive"] {
+  border-color: color-mix(in srgb, var(--ds-positive) 45%, transparent);
+  background: var(--ds-positive-soft);
+  color: var(--ds-positive);
+}
+
+.ds-scanner-light [data-chip][data-active="true"][data-tone="negative"] {
+  border-color: color-mix(in srgb, var(--ds-negative) 45%, transparent);
+  background: var(--ds-negative-soft);
+  color: var(--ds-negative);
+}
+
+.ds-scanner-light #run-scan-btn {
+  border-color: transparent;
+  background: var(--ds-text);
+  color: var(--ds-surface);
+}
+
+.ds-scanner-light #run-scan-btn:hover:not(:disabled) {
+  background: #3a372e;
+}
+
+.ds-scanner-light #refresh-zones-btn,
+.ds-scanner-light #reset-filters-btn {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-elevated);
+  color: var(--ds-text-secondary);
+}
+
+.ds-scanner-light #refresh-zones-btn:hover:not(:disabled),
+.ds-scanner-light #reset-filters-btn:hover {
+  background: var(--ds-gold-50);
+  color: var(--ds-text);
+}
+
+.ds-scanner-light .scanner-section-toggle {
+  color: var(--ds-text-secondary);
+}
+
+.ds-scanner-light .scanner-section-toggle:hover {
+  color: var(--ds-text);
+}
+
+.ds-scanner-light .border-slate-700\/40 {
+  border-color: var(--ds-border);
 }
 
 /* ── Scanner UI animations ─────────────────────────────────────── */
