@@ -14,7 +14,9 @@ jest.mock("@/components/admin/admin-client", () => ({
   adminRequest: (...args: unknown[]) => mockAdminRequest(...args),
   inputClass: "",
 }));
-jest.mock("@/components/header", () => ({ Header: () => null }));
+jest.mock("@/components/overview/app-shell", () => ({
+  OverviewShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 jest.mock("@/components/admin/subscription-plans-panel", () => ({
   PlansPanel: ({ plans }: { plans: unknown[] }) => (
     <div>Plans panel ({plans.length})</div>
@@ -75,7 +77,7 @@ describe("AdminConsolePage", () => {
   it("renders the administration panels for an admin and loads plans", async () => {
     render(<AdminConsolePage />);
 
-    expect(screen.getByText("ADMIN")).toBeTruthy();
+    expect(screen.getByText("Admin console")).toBeTruthy();
     expect(screen.getByText("Add customer")).toBeTruthy();
     expect(screen.getByText("Customers panel")).toBeTruthy();
     await waitFor(() =>
@@ -93,7 +95,7 @@ describe("AdminConsolePage", () => {
     );
     render(<AdminConsolePage />);
 
-    expect(screen.getByText("SUPER_ADMIN")).toBeTruthy();
+    expect(screen.getByText("Admin console")).toBeTruthy();
     expect(screen.getByText("Customers panel")).toBeTruthy();
     await waitFor(() =>
       expect(screen.getByText("Plans panel (1)")).toBeTruthy()

@@ -79,11 +79,7 @@ export function PlansPanel({
       if (editing === "new") {
         await adminRequest("/api/admin/subscription-plans", "POST", body);
       } else if (editing) {
-        await adminRequest(
-          `/api/admin/subscription-plans/${editing}`,
-          "PATCH",
-          body
-        );
+        await adminRequest(`/api/admin/subscription-plans/${editing}`, "PATCH", body);
       }
       setEditing(null);
       setDraft(emptyDraft());
@@ -96,102 +92,103 @@ export function PlansPanel({
   }
 
   return (
-    <section className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="ds-panel overflow-hidden" aria-labelledby="plans-title">
+      <div className="flex flex-col gap-4 border-b border-[var(--ds-border)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <div>
-          <h2 className="text-sm font-semibold text-slate-200">
+          <p className="ds-label">Catalog</p>
+          <h2 id="plans-title" className="mt-2 text-lg font-semibold text-[var(--ds-text)]">
             Subscription plans
           </h2>
-          <p className="text-xs text-slate-500">
-            Plans are deactivated, never deleted. Existing subscriptions keep
-            their plan.
+          <p className="mt-1.5 text-sm text-[var(--ds-text-secondary)]">
+            Plans are deactivated, never deleted. Existing subscriptions keep their plan.
           </p>
         </div>
-        <Button size="sm" variant="secondary" onClick={startCreate}>
+        <Button size="sm" variant="secondary" light onClick={startCreate}>
           New plan
         </Button>
       </div>
 
-      {plans.length === 0 ? (
-        <p className="text-sm text-slate-500">
-          No plans yet. Create one before assigning a subscription.
-        </p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="text-slate-500">
-              <tr className="border-b border-slate-700/50">
-                <th className="py-2 pr-3 font-medium">Name</th>
-                <th className="py-2 pr-3 font-medium">Duration</th>
-                <th className="py-2 pr-3 font-medium">Price</th>
-                <th className="py-2 pr-3 font-medium">Status</th>
-                <th className="py-2 font-medium" />
-              </tr>
-            </thead>
-            <tbody className="text-slate-300">
-              {plans.map((plan) => (
-                <tr
-                  key={plan.planId}
-                  className="border-b border-slate-800/60 last:border-0"
-                >
-                  <td className="py-2 pr-3">
-                    <p className="text-slate-200">{plan.name}</p>
-                    {plan.description && (
-                      <p className="text-slate-600">{plan.description}</p>
-                    )}
-                  </td>
-                  <td className="py-2 pr-3 tabular-nums">
-                    {plan.durationDays} days
-                  </td>
-                  <td className="py-2 pr-3 tabular-nums">
-                    {plan.currency} {plan.price}
-                  </td>
-                  <td className="py-2 pr-3">
-                    <Badge
-                      variant={plan.status === "ACTIVE" ? "success" : "neutral"}
-                    >
-                      {plan.status}
-                    </Badge>
-                  </td>
-                  <td className="py-2 text-right">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => startEdit(plan)}
-                    >
-                      Edit
-                    </Button>
-                  </td>
+      <div className="p-3 sm:p-5">
+        {plans.length === 0 ? (
+          <div className="ds-empty border-0 bg-transparent py-8">
+            <p className="text-sm font-semibold text-[var(--ds-text)]">No plans yet.</p>
+            <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">
+              Create one before assigning a subscription.
+            </p>
+          </div>
+        ) : (
+          <div className="ds-table-wrap" tabIndex={0} role="region" aria-label="Subscription plans table">
+            <table className="ds-table min-w-[680px]">
+              <caption className="sr-only">Subscription plans</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Duration</th>
+                  <th scope="col">Price</th>
+                  <th scope="col">Status</th>
+                  <th scope="col"><span className="sr-only">Actions</span></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {plans.map((plan) => (
+                  <tr key={plan.planId}>
+                    <td>
+                      <p className="font-medium text-[var(--ds-text)]">{plan.name}</p>
+                      {plan.description && (
+                        <p className="mt-1 max-w-md text-[var(--ds-text-secondary)]">{plan.description}</p>
+                      )}
+                    </td>
+                    <td className="ds-mono whitespace-nowrap">{plan.durationDays} days</td>
+                    <td className="ds-mono whitespace-nowrap font-medium text-[var(--ds-text)]">
+                      {plan.currency} {plan.price}
+                    </td>
+                    <td>
+                      <Badge variant={plan.status === "ACTIVE" ? "success" : "neutral"} light>
+                        {plan.status}
+                      </Badge>
+                    </td>
+                    <td className="text-right">
+                      <Button size="sm" variant="ghost" light onClick={() => startEdit(plan)}>
+                        Edit
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {editing && (
-        <div className="space-y-3 rounded-xl border border-slate-700/50 bg-slate-900/40 p-4">
-          <p className="text-xs font-medium text-slate-300">
-            {editing === "new" ? "Create plan" : "Edit plan"}
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
+        <form
+          className="space-y-5 border-t border-[var(--ds-border)] bg-[var(--ds-surface-subtle)] p-5 sm:p-7"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <div>
+            <p className="ds-label">Plan editor</p>
+            <h3 className="mt-2 text-base font-semibold text-[var(--ds-text)]">
+              {editing === "new" ? "Create plan" : "Edit plan"}
+            </h3>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                Name
-              </span>
+              <span className="ds-label">Name</span>
               <input
-                className={inputClass}
+                className={`${inputClass} mt-2`}
                 value={draft.name}
                 maxLength={120}
                 onChange={(event) => set("name", event.target.value)}
               />
             </label>
             <label className="block">
-              <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                Duration (days)
-              </span>
+              <span className="ds-label">Duration (days)</span>
               <input
-                className={inputClass}
+                className={`${inputClass} mt-2`}
                 type="number"
                 min={1}
                 max={3660}
@@ -200,50 +197,38 @@ export function PlansPanel({
               />
             </label>
             <label className="block">
-              <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                Price
-              </span>
+              <span className="ds-label">Price</span>
               <input
-                className={inputClass}
+                className={`${inputClass} mt-2 ds-mono`}
                 inputMode="decimal"
                 value={draft.price}
                 onChange={(event) => set("price", event.target.value)}
               />
             </label>
             <label className="block">
-              <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                Currency
-              </span>
+              <span className="ds-label">Currency</span>
               <input
-                className={inputClass}
+                className={`${inputClass} mt-2 ds-mono`}
                 value={draft.currency}
                 maxLength={3}
-                onChange={(event) =>
-                  set("currency", event.target.value.toUpperCase())
-                }
+                onChange={(event) => set("currency", event.target.value.toUpperCase())}
               />
             </label>
             <label className="block sm:col-span-2">
-              <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                Description
-              </span>
+              <span className="ds-label">Description</span>
               <input
-                className={inputClass}
+                className={`${inputClass} mt-2`}
                 value={draft.description}
                 maxLength={2000}
                 onChange={(event) => set("description", event.target.value)}
               />
             </label>
             <label className="block">
-              <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                Status
-              </span>
+              <span className="ds-label">Status</span>
               <select
-                className={inputClass}
+                className={`${inputClass} mt-2`}
                 value={draft.status}
-                onChange={(event) =>
-                  set("status", event.target.value as SubscriptionPlanStatus)
-                }
+                onChange={(event) => set("status", event.target.value as SubscriptionPlanStatus)}
               >
                 <option value="ACTIVE">ACTIVE</option>
                 <option value="INACTIVE">INACTIVE</option>
@@ -251,15 +236,21 @@ export function PlansPanel({
             </label>
           </div>
 
-          {error && <p className="text-xs text-rose-400">{error}</p>}
+          {error && (
+            <p className="ds-alert ds-alert-negative" role="alert">
+              {error}
+            </p>
+          )}
 
-          <div className="flex gap-2">
-            <Button size="sm" loading={busy} onClick={() => void submit()}>
+          <div className="flex flex-wrap gap-2">
+            <Button size="md" light type="submit" loading={busy}>
               {editing === "new" ? "Create plan" : "Save changes"}
             </Button>
             <Button
-              size="sm"
+              size="md"
               variant="ghost"
+              light
+              type="button"
               disabled={busy}
               onClick={() => {
                 setEditing(null);
@@ -270,7 +261,7 @@ export function PlansPanel({
               Cancel
             </Button>
           </div>
-        </div>
+        </form>
       )}
     </section>
   );

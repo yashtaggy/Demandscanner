@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Header } from "@/components/header";
+import { OverviewShell } from "@/components/overview/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { adminRequest } from "@/components/admin/admin-client";
@@ -32,32 +32,45 @@ export default function AdminSignalDetailPage() {
   const allowed = canManageSignals(user?.role);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <Header lastRefreshed={null} />
+    <OverviewShell lastRefreshed={null}>
+      <main className="mx-auto w-full max-w-[1440px] space-y-6 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Link
+            className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-[var(--ds-text-secondary)] hover:text-[var(--ds-text)]"
+            href="/admin/signals"
+          >
+            <span aria-hidden="true">←</span> Back to signals
+          </Link>
+          <p className="ds-label">Super administrator</p>
+        </div>
 
-      <main className="mx-auto max-w-screen-lg px-4 py-6 sm:px-6 space-y-6">
-        <Link
-          className="text-xs text-indigo-300 hover:text-indigo-200"
-          href="/admin/signals"
-        >
-          ← Back to signals
-        </Link>
+        <header className="border-b border-[var(--ds-border)] pb-6">
+          <h1 className="text-2xl font-semibold tracking-[-0.025em] text-[var(--ds-text)] sm:text-3xl">
+            Signal details
+          </h1>
+          <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">
+            Publication content, recipient delivery and read state.
+          </p>
+        </header>
 
         {loading ? (
-          <div className="h-40 animate-pulse rounded-2xl bg-slate-800/40" />
+          <div className="space-y-4" aria-label="Loading signal details">
+            <div className="ds-skeleton h-64" />
+            <div className="ds-skeleton h-40" />
+          </div>
         ) : !user ? (
-          <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 px-6 py-10 text-center">
-            <h2 className="text-base font-semibold text-slate-100">
+          <div className="ds-empty">
+            <h2 className="text-base font-semibold text-[var(--ds-text)]">
               Sign in with a super administrator account
             </h2>
             <Button
               variant="primary"
-              size="sm"
-              className="mt-4"
+              size="md"
+              light
+              className="mt-5"
               onClick={() => {
                 window.location.assign(
-                  new URL("/login?next=%2Fadmin%2Fsignals", window.location.origin)
-                    .toString()
+                  new URL("/login?next=%2Fadmin%2Fsignals", window.location.origin).toString()
                 );
               }}
             >
@@ -65,11 +78,11 @@ export default function AdminSignalDetailPage() {
             </Button>
           </div>
         ) : !allowed ? (
-          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-6 py-10 text-center">
-            <h2 className="text-base font-semibold text-slate-100">
+          <div className="ds-empty">
+            <h2 className="text-base font-semibold text-[var(--ds-text)]">
               Super administrator access required
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">
               Signal details are limited to super administrators.
             </p>
           </div>
@@ -77,7 +90,7 @@ export default function AdminSignalDetailPage() {
           <SignalDetailView signalId={signalId} />
         )}
       </main>
-    </div>
+    </OverviewShell>
   );
 }
 
@@ -150,23 +163,18 @@ function SignalDetailView({ signalId }: { signalId: string }) {
 
   if (loading) {
     return (
-      <div className="space-y-3" aria-label="Loading signal details">
-        <div className="h-40 animate-pulse rounded-2xl bg-slate-800/40" />
-        <div className="h-24 animate-pulse rounded-xl bg-slate-800/30" />
+      <div className="space-y-4" aria-label="Loading signal details">
+        <div className="ds-skeleton h-64" />
+        <div className="ds-skeleton h-40" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-5 py-4">
-        <p className="text-sm text-rose-300">{error}</p>
-        <Button
-          variant="secondary"
-          size="sm"
-          className="mt-3"
-          onClick={() => void load()}
-        >
+      <div className="ds-alert ds-alert-negative" role="alert">
+        <p className="font-semibold">{error}</p>
+        <Button variant="secondary" size="sm" light className="mt-3" onClick={() => void load()}>
           Try again
         </Button>
       </div>
@@ -176,17 +184,17 @@ function SignalDetailView({ signalId }: { signalId: string }) {
   if (!detail) return null;
 
   return (
-    <>
-      <section className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-5 space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-6">
+      <section className="ds-panel p-5 sm:p-7" aria-labelledby="publication-title">
+        <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-slate-600">
-              Published
-            </p>
-            <p className="text-sm tabular-nums text-slate-200">
+            <h2 id="publication-title" className="text-lg font-semibold text-[var(--ds-text)]">
+              Published message
+            </h2>
+            <p className="ds-mono mt-3 text-xs text-[var(--ds-text-secondary)]">
               {formatDateTime(detail.publishedAt)}
             </p>
-            <p className="mt-1 text-[11px] text-slate-500">
+            <p className="mt-1.5 text-xs leading-5 text-[var(--ds-text-secondary)]">
               Created {formatDateTime(detail.createdAt)}
               {detail.createdBy
                 ? ` by ${detail.createdBy.displayName || detail.createdBy.email}`
@@ -194,73 +202,58 @@ function SignalDetailView({ signalId }: { signalId: string }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={signalStatusVariant(detail.status)}>
+            <Badge variant={signalStatusVariant(detail.status)} light>
               {detail.status}
             </Badge>
-            <Badge variant="neutral">
+            <Badge variant="neutral" light>
               {recipientSummaryLabel(detail.recipientCount)}
             </Badge>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-700/60 bg-slate-900/60 px-4 py-3 text-sm text-slate-200 whitespace-pre-wrap break-words">
+        <div className="mt-6 rounded-[var(--ds-radius-md)] border border-[var(--ds-border)] bg-[var(--ds-surface-subtle)] px-5 py-6 text-sm leading-7 text-[var(--ds-text)] whitespace-pre-wrap break-words sm:px-7 sm:py-8">
           {detail.message}
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
-          <Badge variant="neutral">Pending {detail.delivery.pending}</Badge>
-          <Badge variant="info">Sending {detail.delivery.sending}</Badge>
-          <Badge variant="success">Sent {detail.delivery.sent}</Badge>
-          <Badge variant={detail.delivery.failed > 0 ? "danger" : "neutral"}>
-            Failed {detail.delivery.failed}
-          </Badge>
-          <Badge variant={detail.delivery.skipped > 0 ? "warning" : "neutral"}>
-            Skipped {detail.delivery.skipped}
-          </Badge>
-          <Badge variant="neutral">Read {detail.read.read}</Badge>
-          <Badge variant="neutral">Unread {detail.read.unread}</Badge>
-        </div>
+        <dl className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+          <SummaryStat label="Pending" value={detail.delivery.pending} />
+          <SummaryStat label="Sending" value={detail.delivery.sending} tone="info" />
+          <SummaryStat label="Sent" value={detail.delivery.sent} tone="success" />
+          <SummaryStat label="Failed" value={detail.delivery.failed} tone={detail.delivery.failed > 0 ? "danger" : "neutral"} />
+          <SummaryStat label="Skipped" value={detail.delivery.skipped} tone={detail.delivery.skipped > 0 ? "warning" : "neutral"} />
+          <SummaryStat label="Read" value={detail.read.read} />
+          <SummaryStat label="Unread" value={detail.read.unread} />
+        </dl>
 
         {detail.delivery.failed > 0 && (
-          <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-            <div>
-              <p className="text-sm font-medium text-amber-200">
-                {detail.delivery.failed} recipient
-                {detail.delivery.failed === 1 ? "" : "s"} failed delivery
-              </p>
-              <p className="mt-0.5 text-[11px] text-slate-500">
-                Retrying resets still-active failed recipients to pending so a
-                future dispatcher can attempt them again. It does not send email
-                now.
-              </p>
-            </div>
+          <div className="ds-alert ds-alert-warning mt-6" aria-live="polite">
+            <p className="font-semibold">
+              {detail.delivery.failed} recipient{detail.delivery.failed === 1 ? "" : "s"} failed delivery
+            </p>
+            <p className="mt-1.5">
+              Retrying resets still-active failed recipients to pending so a future dispatcher can attempt them again. It does not send email now.
+            </p>
 
             {retryResult && (
-              <p className="text-xs text-emerald-300">
-                {retryResult.retriedCount} recipient
-                {retryResult.retriedCount === 1 ? "" : "s"} requeued.
+              <p className="ds-alert ds-alert-positive mt-3">
+                {retryResult.retriedCount} recipient{retryResult.retriedCount === 1 ? "" : "s"} requeued.
                 {retryResult.retriedCount === 0
                   ? " They may no longer be active customers."
                   : " No email has been sent."}
               </p>
             )}
-            {retryError && <p className="text-xs text-rose-300">{retryError}</p>}
+            {retryError && (
+              <p className="ds-alert ds-alert-negative mt-3" role="alert">
+                {retryError}
+              </p>
+            )}
 
             {confirmRetry ? (
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  loading={retrying}
-                  onClick={() => void retryFailed()}
-                >
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button size="sm" light loading={retrying} onClick={() => void retryFailed()}>
                   Confirm retry
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  disabled={retrying}
-                  onClick={() => setConfirmRetry(false)}
-                >
+                <Button size="sm" variant="ghost" light disabled={retrying} onClick={() => setConfirmRetry(false)}>
                   Cancel
                 </Button>
               </div>
@@ -268,6 +261,8 @@ function SignalDetailView({ signalId }: { signalId: string }) {
               <Button
                 size="sm"
                 variant="secondary"
+                light
+                className="mt-4"
                 disabled={retrying}
                 onClick={() => {
                   setRetryError(null);
@@ -282,33 +277,35 @@ function SignalDetailView({ signalId }: { signalId: string }) {
         )}
       </section>
 
-      <section className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-5 space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-200">Recipients</h2>
-          <span className="text-[11px] text-slate-500">
+      <section className="ds-panel overflow-hidden" aria-labelledby="recipients-title">
+        <div className="flex flex-col gap-2 border-b border-[var(--ds-border)] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+          <h2 id="recipients-title" className="text-base font-semibold text-[var(--ds-text)]">
+            Recipients
+          </h2>
+          <span className="text-xs text-[var(--ds-text-secondary)]">
             Emails are the address recorded at publication time.
           </span>
         </div>
 
         {detail.recipients.length === 0 ? (
-          <p className="text-sm text-slate-500">
+          <div className="px-5 py-8 text-center text-sm text-[var(--ds-text-secondary)] sm:px-7">
             This signal has no recipient records.
-          </p>
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[52rem] text-left text-xs">
-              <thead className="text-slate-500">
-                <tr className="border-b border-slate-700/50">
-                  <th className="py-2 pr-3 font-medium">Recipient</th>
-                  <th className="py-2 pr-3 font-medium">Read</th>
-                  <th className="py-2 pr-3 font-medium">Delivery</th>
-                  <th className="py-2 pr-3 font-medium">Attempts</th>
-                  <th className="py-2 pr-3 font-medium">Last attempt</th>
-                  <th className="py-2 pr-3 font-medium">Sent</th>
-                  <th className="py-2 font-medium">Error</th>
+          <div className="ds-table-wrap border-0 rounded-none" tabIndex={0} role="region" aria-label="Signal recipients table">
+            <table className="ds-table min-w-[1080px]">
+              <thead>
+                <tr>
+                  <th scope="col">Recipient</th>
+                  <th scope="col">Read</th>
+                  <th scope="col">Delivery</th>
+                  <th scope="col">Attempts</th>
+                  <th scope="col">Last attempt</th>
+                  <th scope="col">Sent</th>
+                  <th scope="col">Error</th>
                 </tr>
               </thead>
-              <tbody className="text-slate-300">
+              <tbody>
                 {detail.recipients.map((recipient) => (
                   <RecipientRow key={recipient.recipientId} recipient={recipient} />
                 ))}
@@ -317,53 +314,71 @@ function SignalDetailView({ signalId }: { signalId: string }) {
           </div>
         )}
       </section>
-    </>
+    </div>
+  );
+}
+
+function SummaryStat({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  tone?: "success" | "danger" | "warning" | "neutral" | "info";
+}) {
+  return (
+    <div className="rounded-[var(--ds-radius-md)] border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] px-3 py-3">
+      <dt className="text-[11px] font-medium text-[var(--ds-text-secondary)]">{label}</dt>
+      <dd className="ds-mono mt-1.5 text-lg font-semibold text-[var(--ds-text)]">{value}</dd>
+      <span
+        aria-hidden="true"
+        className={`mt-2 block h-1 w-8 rounded-full ${
+          tone === "success"
+            ? "bg-[var(--ds-positive)]"
+            : tone === "danger"
+              ? "bg-[var(--ds-negative)]"
+              : tone === "warning"
+                ? "bg-[var(--ds-warning)]"
+                : tone === "info"
+                  ? "bg-[var(--ds-info)]"
+                  : "bg-[var(--ds-border-strong)]"
+        }`}
+      />
+    </div>
   );
 }
 
 function RecipientRow({ recipient }: { recipient: SignalRecipientDetail }) {
   return (
-    <tr className="border-b border-slate-800/60 last:border-0 align-top">
-      <td className="py-2 pr-3">
-        <p className="text-slate-200">
-          {recipient.displayName || recipient.email}
-        </p>
-        <p className="text-[11px] text-slate-500">{recipient.email}</p>
+    <tr>
+      <td>
+        <p className="font-medium text-[var(--ds-text)]">{recipient.displayName || recipient.email}</p>
+        <p className="mt-1 text-[11px] text-[var(--ds-text-secondary)]">{recipient.email}</p>
       </td>
-      <td className="py-2 pr-3">
+      <td>
         {recipient.readAt ? (
-          <span className="tabular-nums text-emerald-300">
+          <span className="ds-mono whitespace-nowrap text-[var(--ds-positive)]">
             {formatDateTime(recipient.readAt)}
           </span>
         ) : (
-          <span className="text-slate-500">Unread</span>
+          <span className="text-[var(--ds-text-secondary)]">Unread</span>
         )}
       </td>
-      <td className="py-2 pr-3">
-        <Badge variant={emailStatusVariant(recipient.emailStatus)}>
+      <td>
+        <Badge variant={emailStatusVariant(recipient.emailStatus)} light>
           {recipient.emailStatus}
         </Badge>
       </td>
-      <td className="py-2 pr-3 tabular-nums">{recipient.emailAttempts}</td>
-      <td className="py-2 pr-3 tabular-nums text-slate-400">
-        {recipient.emailLastAttemptAt
-          ? formatDateTime(recipient.emailLastAttemptAt)
-          : "—"}
+      <td className="ds-mono">{recipient.emailAttempts}</td>
+      <td className="ds-mono whitespace-nowrap text-[var(--ds-text-secondary)]">
+        {recipient.emailLastAttemptAt ? formatDateTime(recipient.emailLastAttemptAt) : "—"}
       </td>
-      <td className="py-2 pr-3 tabular-nums text-slate-400">
+      <td className="ds-mono whitespace-nowrap text-[var(--ds-text-secondary)]">
         {recipient.emailSentAt ? formatDateTime(recipient.emailSentAt) : "—"}
       </td>
-      <td className="max-w-[16rem] py-2">
-        {recipient.emailError ? (
-          <span
-            className="block truncate text-rose-300"
-            title={recipient.emailError}
-          >
-            {recipient.emailError}
-          </span>
-        ) : (
-          <span className="text-slate-600">—</span>
-        )}
+      <td className="max-w-[20rem] break-words text-[var(--ds-text-secondary)]">
+        {recipient.emailError || "—"}
       </td>
     </tr>
   );

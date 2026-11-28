@@ -185,7 +185,7 @@ export function OverviewShell({
             onClick={() => setCollapsed((value) => !value)}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-expanded={!collapsed}
-            className={`flex min-h-10 w-full items-center rounded-lg text-[12px] font-semibold text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-gold-100)] hover:text-[var(--ds-text)] ${
+            className={`flex min-h-11 w-full items-center rounded-lg text-[12px] font-semibold text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-gold-100)] hover:text-[var(--ds-text)] ${
               collapsed ? "justify-center" : "gap-2.5 px-2.5"
             }`}
           >
@@ -285,7 +285,7 @@ function TopBar({
         <button
           type="button"
           onClick={onOpenNav}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] lg:hidden"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] lg:hidden"
           style={{ borderColor: "var(--ds-border)" }}
           aria-label="Open navigation"
         >
@@ -351,7 +351,7 @@ function TopBar({
                 onClick={() => {
                   window.location.href = "/api/kite/login";
                 }}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)]"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)]"
                 style={{ borderColor: "var(--ds-border)" }}
                 title="Connect Kite for broker features such as Live Trade"
               >
@@ -369,7 +369,7 @@ function TopBar({
                 onClick={() => setMenuOpen((value) => !value)}
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
-                className="flex h-10 items-center gap-2 rounded-full border pl-1 pr-2 text-left transition-colors hover:bg-[var(--ds-surface-subtle)] sm:pr-3"
+                className="flex min-h-11 items-center gap-2 rounded-full border pl-1 pr-2 text-left transition-colors hover:bg-[var(--ds-surface-subtle)] sm:pr-3"
                 style={{ borderColor: "var(--ds-border)" }}
               >
                 <span
@@ -424,7 +424,7 @@ function TopBar({
                     role="menuitem"
                     onClick={() => void onLogout()}
                     disabled={loggingOut}
-                    className="flex w-full items-center gap-2.5 px-4 py-3 text-left text-[12px] font-semibold text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] disabled:opacity-60"
+                    className="flex min-h-11 w-full items-center gap-2.5 px-4 py-3 text-left text-[12px] font-semibold text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] disabled:opacity-60"
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" />
                     {loggingOut ? "Signing out…" : "Sign out"}
@@ -438,7 +438,7 @@ function TopBar({
               onClick={() => {
                 window.location.href = "/login";
               }}
-              className="inline-flex h-9 items-center rounded-full px-3.5 text-[12px] font-semibold text-[var(--ds-surface)]"
+              className="inline-flex min-h-11 items-center rounded-full px-3.5 text-[12px] font-semibold text-[var(--ds-surface)]"
               style={{ background: "var(--ds-text)" }}
             >
               Sign in
@@ -544,7 +544,7 @@ function MobileNavDrawer({
             ref={closeRef}
             type="button"
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border text-[var(--ds-text-secondary)]"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border text-[var(--ds-text-secondary)]"
             style={{ borderColor: "var(--ds-border)" }}
             aria-label="Close navigation"
           >

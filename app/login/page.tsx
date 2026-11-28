@@ -91,81 +91,115 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="text-center space-y-2">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-900/40">
-            <svg viewBox="0 0 24 24" className="h-6 w-6 text-white" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
-            </svg>
+    <div className="ds-app min-h-[100dvh] bg-[var(--ds-canvas)] text-[var(--ds-text)]">
+      <main className="mx-auto grid min-h-[100dvh] w-full max-w-[1440px] items-center gap-8 px-[max(1rem,env(safe-area-inset-left))] py-[max(2rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(2rem,env(safe-area-inset-bottom))] sm:px-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))] lg:grid-cols-[minmax(0,1fr)_minmax(400px,480px)] lg:gap-16 lg:px-12">
+        <section className="hidden self-stretch py-8 lg:flex lg:flex-col lg:justify-between" aria-label="DemandScanner">
+          <div>
+            <p className="text-sm font-bold tracking-[-0.02em] text-[var(--ds-text)]">
+              DemandScanner<span className="text-[var(--ds-gold-700)]">.</span>
+            </p>
+            <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--ds-text-secondary)]">
+              Market research workspace
+            </p>
           </div>
-          <h1 className="text-xl font-bold text-white">
-            Sign in to Demand<span className="text-indigo-400">Scan</span>
-          </h1>
-          <p className="text-xs text-slate-500">
-            Accounts are provisioned by an administrator. There is no public sign-up.
+
+          <div className="max-w-xl">
+            <div className="mb-7 h-px w-16 bg-[var(--ds-gold-500)]" aria-hidden="true" />
+            <p className="text-balance text-4xl font-semibold leading-[1.12] tracking-[-0.04em] text-[var(--ds-text)] xl:text-5xl">
+              Clarity in every market decision.
+            </p>
+            <p className="mt-5 max-w-md text-sm leading-6 text-[var(--ds-text-secondary)]">
+              Signals, market context and your account in one considered research workspace.
+            </p>
+          </div>
+
+          <p className="ds-mono text-[11px] text-[var(--ds-text-secondary)]">
+            Private access · Administrator-provisioned accounts
           </p>
-        </div>
+        </section>
 
-        {!configured ? (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
-            Firebase is not configured for this deployment. Set the
-            NEXT_PUBLIC_FIREBASE_* environment variables.
+        <section className="ds-panel w-full p-5 sm:p-8" aria-labelledby="login-title">
+          <div className="mb-8 lg:hidden">
+            <p className="text-sm font-bold tracking-[-0.02em] text-[var(--ds-text)]">
+              DemandScanner<span className="text-[var(--ds-gold-700)]">.</span>
+            </p>
+            <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ds-text-secondary)]">
+              Market research workspace
+            </p>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1.5">
-              <label htmlFor="email" className="text-xs font-medium text-slate-400">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="username"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
-              />
-            </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="password" className="text-xs font-medium text-slate-400">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-indigo-500"
-              />
-            </div>
+          <div className="mb-7">
+            <p className="ds-label">Secure access</p>
+            <h1 id="login-title" className="mt-2 text-2xl font-semibold tracking-[-0.025em] text-[var(--ds-text)]">
+              Sign in to DemandScanner
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-[var(--ds-text-secondary)]">
+              Use the email and password associated with your account.
+            </p>
+          </div>
 
-            {error && (
-              <div
-                role="alert"
-                className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-400"
-              >
-                {error}
+          {!configured ? (
+            <div className="ds-alert ds-alert-warning" role="alert">
+              Firebase is not configured for this deployment. Set the
+              NEXT_PUBLIC_FIREBASE_* environment variables.
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <label htmlFor="email" className="ds-label">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="username"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="ds-field"
+                  placeholder="you@example.com"
+                />
               </div>
-            )}
 
-            <Button type="submit" variant="primary" size="md" loading={submitting} className="w-full">
-              Sign in
-            </Button>
-          </form>
-        )}
+              <div className="space-y-2">
+                <label htmlFor="password" className="ds-label">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="ds-field"
+                />
+              </div>
 
-        <p className="text-center text-[11px] text-slate-600">
-          If you were just provisioned, use the one-time password reset link from your
-          administrator to set a password first.
-        </p>
-      </div>
+              {error && (
+                <div className="ds-alert ds-alert-negative" role="alert">
+                  {error}
+                </div>
+              )}
+
+              <Button type="submit" variant="primary" size="lg" light loading={submitting} className="w-full">
+                Sign in
+              </Button>
+            </form>
+          )}
+
+          <div className="mt-7 border-t border-[var(--ds-border)] pt-5">
+            <p className="text-xs leading-5 text-[var(--ds-text-secondary)]">
+              Accounts are provisioned by an administrator. There is no public sign-up.
+            </p>
+            <p className="mt-2 text-xs leading-5 text-[var(--ds-text-secondary)]">
+              If you were just provisioned, use the one-time password reset link from your administrator to set a password first.
+            </p>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }

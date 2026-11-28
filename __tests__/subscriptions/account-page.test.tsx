@@ -12,7 +12,9 @@ jest.mock("@/hooks/use-app-auth", () => ({ useAppAuth: () => mockAppAuth() }));
 jest.mock("@/hooks/use-subscription", () => ({
   useSubscription: () => mockSubscription(),
 }));
-jest.mock("@/components/header", () => ({ Header: () => null }));
+jest.mock("@/components/overview/app-shell", () => ({
+  OverviewShell: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
 
 import { render, screen } from "@testing-library/react";
 import AccountSubscriptionPage from "@/app/account/subscription/page";

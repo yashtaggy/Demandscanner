@@ -248,7 +248,7 @@ function ConnectPrompt() {
       <Link
         href="/login"
         id="sign-in-main-button"
-        className="inline-flex h-10 items-center justify-center rounded-xl bg-[var(--ds-text)] px-5 text-sm font-semibold text-[var(--ds-surface)] transition-colors hover:bg-[#3a372e]"
+        className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--ds-text)] px-5 text-sm font-semibold text-[var(--ds-surface)] transition-colors hover:bg-[#3a372e]"
       >
         Sign in
       </Link>

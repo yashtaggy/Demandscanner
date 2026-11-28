@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Header } from "@/components/header";
+import { OverviewShell } from "@/components/overview/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { signalsRequest } from "@/components/signals/signals-client";
@@ -27,25 +27,45 @@ export default function SignalDetailPage() {
   const allowed = canOpenSignalsInbox(user?.role);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <Header lastRefreshed={null} />
+    <OverviewShell lastRefreshed={null}>
+      <main className="mx-auto w-full max-w-[1024px] space-y-6 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Link
+            className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-[var(--ds-text-secondary)] hover:text-[var(--ds-text)]"
+            href="/signals"
+          >
+            <span aria-hidden="true">←</span> Back to signals
+          </Link>
+          <p className="ds-label">Customer workspace</p>
+        </div>
 
-      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 space-y-6">
-        <Link className="text-xs text-indigo-300 hover:text-indigo-200" href="/signals">
-          ← Back to signals
-        </Link>
+        <header className="border-b border-[var(--ds-border)] pb-6">
+          <h1 className="text-2xl font-semibold tracking-[-0.025em] text-[var(--ds-text)] sm:text-3xl">
+            Signal detail
+          </h1>
+          <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">
+            The complete message published to your account.
+          </p>
+        </header>
 
         {loading ? (
-          <div className="h-40 animate-pulse rounded-2xl bg-slate-800/40" />
+          <div className="space-y-4" aria-label="Loading signal">
+            <div className="ds-skeleton h-36" />
+            <div className="ds-skeleton h-56" />
+          </div>
         ) : !user ? (
-          <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 px-6 py-10 text-center">
-            <h2 className="text-base font-semibold text-slate-100">
+          <div className="ds-empty">
+            <h2 className="text-base font-semibold text-[var(--ds-text)]">
               Sign in to view this signal
             </h2>
+            <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">
+              This message is available only to the account it was assigned to.
+            </p>
             <Button
               variant="primary"
-              size="sm"
-              className="mt-4"
+              size="md"
+              light
+              className="mt-5"
               onClick={() => {
                 window.location.assign(
                   new URL("/login?next=%2Fsignals", window.location.origin).toString()
@@ -56,11 +76,11 @@ export default function SignalDetailPage() {
             </Button>
           </div>
         ) : !allowed ? (
-          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-6 py-10 text-center">
-            <h2 className="text-base font-semibold text-slate-100">
+          <div className="ds-empty">
+            <h2 className="text-base font-semibold text-[var(--ds-text)]">
               Signals is a customer inbox
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">
               Administrative accounts do not receive customer signals.
             </p>
           </div>
@@ -68,7 +88,7 @@ export default function SignalDetailPage() {
           <CustomerSignalView signalId={signalId} />
         )}
       </main>
-    </div>
+    </OverviewShell>
   );
 }
 
@@ -138,22 +158,22 @@ function CustomerSignalView({ signalId }: { signalId: string }) {
 
   if (loading) {
     return (
-      <div className="space-y-3" aria-label="Loading signal">
-        <div className="h-48 animate-pulse rounded-2xl bg-slate-800/40" />
+      <div className="space-y-4" aria-label="Loading signal">
+        <div className="ds-skeleton h-36" />
+        <div className="ds-skeleton h-56" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-5 py-4">
-        <p className="text-sm text-rose-300">{error}</p>
-        <p className="mt-1 text-xs text-slate-500">
-          The signal may have been removed, or it is not assigned to your
-          account.
+      <div className="ds-alert ds-alert-negative" role="alert">
+        <p className="font-semibold">{error}</p>
+        <p className="mt-2">
+          The signal may have been removed, or it is not assigned to your account.
         </p>
         <Link
-          className="mt-3 inline-block text-xs text-indigo-300 hover:text-indigo-200"
+          className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--ds-negative)] underline underline-offset-4"
           href="/signals"
         >
           Return to inbox
@@ -165,46 +185,55 @@ function CustomerSignalView({ signalId }: { signalId: string }) {
   if (!signal) return null;
 
   return (
-    <section className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-5 space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <article className="ds-panel overflow-hidden" aria-labelledby="signal-message-title">
+      <div className="flex flex-col gap-5 border-b border-[var(--ds-border)] px-5 py-5 sm:flex-row sm:items-start sm:justify-between sm:px-7 sm:py-6">
         <div>
-          <p className="text-[10px] uppercase tracking-wider text-slate-600">
-            Published
-          </p>
-          <p className="text-sm tabular-nums text-slate-200">
-            {formatDateTime(signal.publishedAt)}
-          </p>
-          <p className="mt-1 text-[11px] text-slate-500">
-            {signal.readAt
-              ? `Read ${formatDateTime(signal.readAt)}`
-              : "Not read yet"}
-          </p>
+          <h2 id="signal-message-title" className="text-lg font-semibold tracking-[-0.015em] text-[var(--ds-text)]">
+            Published message
+          </h2>
+          <div className="mt-3 space-y-1.5">
+            <p className="ds-mono text-xs text-[var(--ds-text-secondary)]">
+              <span className="mr-2 text-[var(--ds-text-secondary)]">Published</span>
+              {formatDateTime(signal.publishedAt)}
+            </p>
+            <p className="ds-mono text-xs text-[var(--ds-text-secondary)]">
+              {signal.readAt
+                ? `Read ${formatDateTime(signal.readAt)}`
+                : "Not read yet"}
+            </p>
+          </div>
         </div>
-        <Badge variant={signal.isRead ? "neutral" : "info"}>
+        <Badge variant={signal.isRead ? "neutral" : "warning"} light dot className="self-start">
           {signal.isRead ? "Read" : "Unread"}
         </Badge>
       </div>
 
-      <div className="rounded-xl border border-slate-700/60 bg-slate-900/60 px-4 py-3 text-sm text-slate-200 whitespace-pre-wrap break-words">
-        {signal.message}
+      <div className="px-5 py-6 sm:px-7 sm:py-8">
+        <div className="rounded-[var(--ds-radius-md)] border border-[var(--ds-border)] bg-[var(--ds-surface-subtle)] px-5 py-6 text-[15px] leading-7 text-[var(--ds-text)] whitespace-pre-wrap break-words sm:px-7 sm:py-8 sm:text-base sm:leading-8">
+          {signal.message}
+        </div>
       </div>
 
       {readError && (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90">
+        <p className="ds-alert ds-alert-warning mx-5 mb-5 sm:mx-7" role="alert">
           {readError} The status shown above is the last confirmed state.
         </p>
       )}
 
-      <div>
+      <div className="flex flex-col gap-3 border-t border-[var(--ds-border)] bg-[var(--ds-surface-subtle)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+        <p className="text-xs text-[var(--ds-text-secondary)]">
+          Opening a signal marks it as read once.
+        </p>
         <Button
           size="sm"
           variant="secondary"
+          light
           loading={readBusy}
           onClick={() => void updateRead(!signal.isRead)}
         >
           {signal.isRead ? "Mark as unread" : "Mark as read"}
         </Button>
       </div>
-    </section>
+    </article>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
-export const inputClass =
-  "w-full rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-indigo-500/60 focus:outline-none";
+export const inputClass = "ds-field";
 
 /**
  * Thin JSON client for the admin subscription API. Errors carry the server's

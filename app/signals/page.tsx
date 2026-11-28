@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Header } from "@/components/header";
+import { OverviewShell } from "@/components/overview/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { signalsRequest } from "@/components/signals/signals-client";
@@ -26,31 +26,39 @@ export default function SignalsInboxPage() {
   const allowed = canOpenSignalsInbox(user?.role);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <Header lastRefreshed={null} />
-
-      <main className="mx-auto max-w-3xl px-4 py-6 sm:px-6 space-y-6">
-        <div>
-          <h1 className="text-lg font-bold text-slate-100">Signals</h1>
-          <p className="mt-0.5 text-xs text-slate-500">
-            Messages published to your account, newest first.
-          </p>
-        </div>
+    <OverviewShell lastRefreshed={null}>
+      <main className="mx-auto w-full max-w-[1280px] space-y-6 px-4 pb-10 pt-6 sm:px-6 lg:px-8">
+        <header className="flex flex-col gap-4 border-b border-[var(--ds-border)] pb-6 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="ds-label">Customer workspace</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-[-0.025em] text-[var(--ds-text)] sm:text-3xl">
+              Signals
+            </h1>
+            <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">
+              Messages published to your account, newest first.
+            </p>
+          </div>
+          <p className="ds-mono text-xs text-[var(--ds-text-secondary)]">Asia/Kolkata</p>
+        </header>
 
         {loading ? (
           <div className="space-y-3" aria-label="Loading signals">
-            <div className="h-20 animate-pulse rounded-2xl bg-slate-800/40" />
-            <div className="h-20 animate-pulse rounded-2xl bg-slate-800/30" />
+            <div className="ds-skeleton h-24" />
+            <div className="ds-skeleton h-24" />
           </div>
         ) : !user ? (
-          <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/5 px-6 py-10 text-center">
-            <h2 className="text-base font-semibold text-slate-100">
+          <div className="ds-empty">
+            <h2 className="text-base font-semibold text-[var(--ds-text)]">
               Sign in to view your signals
             </h2>
+            <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">
+              Your administrator-published messages are available after sign-in.
+            </p>
             <Button
               variant="primary"
-              size="sm"
-              className="mt-4"
+              size="md"
+              light
+              className="mt-5"
               onClick={() => {
                 window.location.assign(
                   new URL("/login?next=%2Fsignals", window.location.origin).toString()
@@ -61,16 +69,16 @@ export default function SignalsInboxPage() {
             </Button>
           </div>
         ) : !allowed ? (
-          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-6 py-10 text-center">
-            <h2 className="text-base font-semibold text-slate-100">
+          <div className="ds-empty">
+            <h2 className="text-base font-semibold text-[var(--ds-text)]">
               Signals is a customer inbox
             </h2>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">
               Administrative accounts do not receive customer signals.
             </p>
             {user.role === "SUPER_ADMIN" && (
               <Link
-                className="mt-4 inline-block text-xs text-indigo-300 hover:text-indigo-200"
+                className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--ds-gold-700)] underline decoration-[var(--ds-gold-500)] underline-offset-4"
                 href="/admin/signals"
               >
                 Go to signal administration →
@@ -81,7 +89,7 @@ export default function SignalsInboxPage() {
           <SignalInbox />
         )}
       </main>
-    </div>
+    </OverviewShell>
   );
 }
 
@@ -170,17 +178,24 @@ function SignalInbox() {
   }
 
   return (
-    <section className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-slate-200">Inbox</h2>
+    <section className="ds-panel overflow-hidden" aria-labelledby="inbox-title">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--ds-border)] px-4 py-4 sm:px-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 id="inbox-title" className="text-sm font-semibold text-[var(--ds-text)]">
+            Inbox
+          </h2>
           {unreadCount > 0 && (
-            <Badge variant="info">{unreadCount} unread</Badge>
+            <span aria-live="polite">
+              <Badge variant="info" light dot>
+                {unreadCount} unread
+              </Badge>
+            </span>
           )}
         </div>
         <Button
           size="sm"
           variant="secondary"
+          light
           loading={loading}
           onClick={() => {
             setLoading(true);
@@ -192,86 +207,101 @@ function SignalInbox() {
         </Button>
       </div>
 
-      {error ? (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3">
-          <p className="text-xs text-rose-300">{error}</p>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="mt-2"
-            onClick={() => void loadFirst()}
-          >
-            Try again
-          </Button>
-        </div>
-      ) : loading && items.length === 0 ? (
-        <div className="space-y-2" aria-label="Loading signals">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-20 animate-pulse rounded-xl bg-slate-800/40"
-            />
-          ))}
-        </div>
-      ) : items.length === 0 ? (
-        <div className="rounded-xl border border-slate-700/40 p-6 text-center">
-          <p className="text-sm text-slate-400">No signals yet.</p>
-          <p className="mt-1 text-xs text-slate-600">
-            New messages from your administrator will appear here.
-          </p>
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {items.map((signal) => (
-            <li key={signal.signalId}>
-              <Link
-                href={`/signals/${signal.signalId}`}
-                className={`block rounded-xl border p-4 transition-colors hover:border-indigo-500/40 hover:bg-slate-800/60 ${
-                  signal.isRead
-                    ? "border-slate-700/40 bg-slate-900/30"
-                    : "border-indigo-500/30 bg-indigo-500/5"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      {!signal.isRead && (
-                        <span
-                          className="h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-400"
-                          aria-label="Unread"
-                        />
-                      )}
-                      <p
-                        className={`line-clamp-2 break-words text-sm ${
-                          signal.isRead
-                            ? "text-slate-300"
-                            : "font-medium text-slate-100"
-                        }`}
-                      >
-                        {signal.messagePreview || "(empty message)"}
-                      </p>
+      <div className="p-3 sm:p-5">
+        {error ? (
+          <div className="ds-alert ds-alert-negative" role="alert">
+            <p>{error}</p>
+            <Button
+              size="sm"
+              variant="ghost"
+              light
+              className="mt-3"
+              onClick={() => void loadFirst()}
+            >
+              Try again
+            </Button>
+          </div>
+        ) : loading && items.length === 0 ? (
+          <div className="space-y-3" aria-label="Loading signals">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="ds-skeleton h-24" />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <div className="ds-empty border-0 bg-transparent px-4 py-12">
+            <p className="text-sm font-semibold text-[var(--ds-text)]">No signals yet.</p>
+            <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">
+              New messages from your administrator will appear here.
+            </p>
+          </div>
+        ) : (
+          <ul className="space-y-3">
+            {items.map((signal) => (
+              <li key={signal.signalId}>
+                <Link
+                  href={`/signals/${signal.signalId}`}
+                  className={`group block min-h-[104px] rounded-[var(--ds-radius-md)] border p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ds-gold-500)] focus-visible:ring-offset-2 sm:p-5 ${
+                    signal.isRead
+                      ? "border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] hover:bg-[var(--ds-surface-subtle)]"
+                      : "border-[color-mix(in_srgb,var(--ds-gold-500)_55%,var(--ds-border))] bg-[var(--ds-gold-50)] hover:bg-[var(--ds-gold-100)]"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`mt-2 h-2 w-2 shrink-0 rounded-full ${
+                        signal.isRead
+                          ? "bg-[var(--ds-border-strong)]"
+                          : "bg-[var(--ds-gold-500)] ring-4 ring-[color-mix(in_srgb,var(--ds-gold-500)_14%,transparent)]"
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <p
+                          className={`line-clamp-3 break-words text-sm leading-6 sm:line-clamp-2 ${
+                            signal.isRead
+                              ? "text-[var(--ds-text-secondary)]"
+                              : "font-semibold text-[var(--ds-text)]"
+                          }`}
+                        >
+                          {signal.messagePreview || "(empty message)"}
+                        </p>
+                        <Badge variant={signal.isRead ? "neutral" : "warning"} light className="self-start">
+                          {signal.isRead ? "Read" : "Unread"}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                        <time
+                          dateTime={signal.publishedAt}
+                          className="ds-mono text-[11px] text-[var(--ds-text-secondary)]"
+                        >
+                          {formatDateTime(signal.publishedAt)}
+                        </time>
+                        <span className="text-xs font-medium text-[var(--ds-text-secondary)]">
+                          Open signal <span aria-hidden="true">→</span>
+                        </span>
+                      </div>
                     </div>
-                    <p className="mt-1 text-[11px] tabular-nums text-slate-500">
-                      {formatDateTime(signal.publishedAt)}
-                    </p>
                   </div>
-                  <span className="shrink-0 text-[11px] text-slate-500">
-                    {signal.isRead ? "Read" : "Unread"}
-                  </span>
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {moreError && (
+        <p className="ds-alert ds-alert-negative mx-3 mb-3 sm:mx-5" role="alert">
+          {moreError}
+        </p>
       )}
 
-      {moreError && <p className="text-xs text-rose-400">{moreError}</p>}
-
       {!error && items.length > 0 && items.length < total && (
-        <div className="flex justify-center">
+        <div className="flex justify-center border-t border-[var(--ds-border)] px-4 py-4">
           <Button
             size="sm"
             variant="secondary"
+            light
             loading={loadingMore}
             onClick={() => void loadMore()}
           >

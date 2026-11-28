@@ -193,7 +193,7 @@ export function ScannerPanel({ isAuthenticated, triggerHost }: ScannerPanelProps
                 type="button"
                 onClick={() => setCollapsed(true)}
                 aria-label="Collapse scanner panel"
-                className="hidden h-8 w-8 items-center justify-center rounded-lg text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] min-[1440px]:flex"
+                className="hidden h-11 w-11 items-center justify-center rounded-lg text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] min-[1440px]:flex"
               >
                 <ChevronRight className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
               </button>
@@ -201,7 +201,7 @@ export function ScannerPanel({ isAuthenticated, triggerHost }: ScannerPanelProps
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close scanner panel"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] min-[1440px]:hidden"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-[var(--ds-text-muted)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] min-[1440px]:hidden"
               >
                 <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
               </button>
@@ -216,7 +216,7 @@ export function ScannerPanel({ isAuthenticated, triggerHost }: ScannerPanelProps
                 </p>
                 <Link
                   href="/login"
-                  className="inline-flex h-8 items-center rounded-lg bg-[var(--ds-text)] px-3 text-[11.5px] font-semibold text-[var(--ds-surface)]"
+                  className="inline-flex min-h-11 items-center rounded-lg bg-[var(--ds-text)] px-3 text-[11.5px] font-semibold text-[var(--ds-surface)]"
                 >
                   Sign in
                 </Link>
@@ -305,7 +305,7 @@ export function ScannerPanel({ isAuthenticated, triggerHost }: ScannerPanelProps
             type="button"
             id="open-scanner-drawer"
             onClick={() => setMobileOpen(true)}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-[var(--ds-text)] px-4 text-[12.5px] font-semibold text-[var(--ds-surface)] shadow-[var(--ds-shadow-card)] transition-colors hover:bg-[#3a372e] min-[1440px]:hidden"
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--ds-text)] px-4 text-[12.5px] font-semibold text-[var(--ds-surface)] shadow-[var(--ds-shadow-card)] transition-colors hover:bg-[#3a372e] min-[1440px]:hidden"
             aria-haspopup="dialog"
           >
             <ScanLine className="h-4 w-4" strokeWidth={2} aria-hidden="true" />

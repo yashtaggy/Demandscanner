@@ -209,7 +209,7 @@ export default function ScannerPage() {
                   onClick={runScan}
                   disabled={!isAuthenticated || accessBlocked || authLoading || isScanActive}
                   aria-busy={isScanActive}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-[var(--ds-gold-500)] bg-[var(--ds-gold-300)] px-4 text-[12.5px] font-bold text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-gold-500)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ds-gold-700)] disabled:cursor-not-allowed disabled:opacity-55"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--ds-gold-500)] bg-[var(--ds-gold-300)] px-4 text-[12.5px] font-bold text-[var(--ds-text)] transition-colors hover:bg-[var(--ds-gold-500)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ds-gold-700)] disabled:cursor-not-allowed disabled:opacity-55"
                   title={
                     !isAuthenticated
                       ? "Sign in to run the scanner"
@@ -418,7 +418,7 @@ function SignInNotice() {
       <Link
         href="/login"
         id="scanner-sign-in-btn"
-        className="inline-flex h-9 items-center justify-center rounded-xl bg-[var(--ds-text)] px-4 text-[12px] font-semibold text-[var(--ds-surface)] transition-colors hover:bg-[#3a372e]"
+        className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[var(--ds-text)] px-4 text-[12px] font-semibold text-[var(--ds-surface)] transition-colors hover:bg-[#3a372e]"
       >
         Sign in
       </Link>

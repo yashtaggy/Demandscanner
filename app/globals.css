@@ -45,6 +45,8 @@
 
 /* ── Overview shell ─────────────────────────────────────────────────── */
 .ds-app {
+  --ds-font-sans: var(--font-manrope), "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --ds-font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
   font-family: var(--ds-font-sans);
   background: var(--ds-canvas);
   color: var(--ds-text);
@@ -68,7 +70,7 @@
 }
 
 .ds-app :focus-visible {
-  outline: 2px solid var(--ds-gold-500);
+  outline: 2px solid var(--ds-gold-700);
   outline-offset: 2px;
 }
 
@@ -142,6 +144,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html:root {
+    scroll-behavior: auto;
+  }
+
   .ds-drawer-enter,
   .ds-fade-in,
   .ds-app * {
@@ -435,4 +441,159 @@ html {
   .ds-lt-row-zone {
     grid-column: auto;
   }
+}
+
+/* ── Shared light application surfaces ─────────────────────────────── */
+.ds-panel {
+  border: 1px solid var(--ds-border);
+  background: var(--ds-surface);
+  border-radius: var(--ds-radius-lg);
+  box-shadow: var(--ds-shadow-card);
+}
+
+.ds-panel-subtle {
+  border: 1px solid var(--ds-border);
+  background: var(--ds-surface-elevated);
+  border-radius: var(--ds-radius-md);
+}
+
+.ds-label {
+  display: block;
+  color: var(--ds-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ds-field {
+  min-height: 44px;
+  width: 100%;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-elevated);
+  padding: 10px 12px;
+  color: var(--ds-text);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.ds-field::placeholder {
+  color: var(--ds-text-secondary);
+}
+
+.ds-field:focus {
+  border-color: var(--ds-gold-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-gold-500) 18%, transparent);
+}
+
+.ds-field:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+textarea.ds-field {
+  min-height: 160px;
+  resize: vertical;
+}
+
+.ds-field option {
+  background: var(--ds-surface-elevated);
+  color: var(--ds-text);
+}
+
+.ds-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-elevated);
+}
+
+.ds-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--ds-text-secondary);
+  font-size: 12px;
+  text-align: left;
+}
+
+.ds-table th {
+  border-bottom: 1px solid var(--ds-border);
+  background: var(--ds-gold-50);
+  padding: 10px 12px;
+  color: var(--ds-text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ds-table td {
+  border-bottom: 1px solid color-mix(in srgb, var(--ds-border) 70%, transparent);
+  padding: 11px 12px;
+  vertical-align: top;
+}
+
+.ds-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.ds-table tbody tr:hover {
+  background: color-mix(in srgb, var(--ds-gold-50) 55%, transparent);
+}
+
+.ds-empty {
+  border: 1px dashed var(--ds-border-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-gold-50);
+  padding: 24px;
+  color: var(--ds-text-secondary);
+  text-align: center;
+}
+
+.ds-alert {
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-elevated);
+  padding: 12px 14px;
+  color: var(--ds-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ds-alert-info {
+  border-color: color-mix(in srgb, var(--ds-info) 30%, transparent);
+  background: var(--ds-info-soft);
+  color: var(--ds-info);
+}
+
+.ds-alert-positive {
+  border-color: color-mix(in srgb, var(--ds-positive) 30%, transparent);
+  background: var(--ds-positive-soft);
+  color: var(--ds-positive);
+}
+
+.ds-alert-warning {
+  border-color: color-mix(in srgb, var(--ds-warning) 30%, transparent);
+  background: var(--ds-warning-soft);
+  color: var(--ds-warning);
+}
+
+.ds-alert-negative {
+  border-color: color-mix(in srgb, var(--ds-negative) 30%, transparent);
+  background: var(--ds-negative-soft);
+  color: color-mix(in srgb, var(--ds-negative) 90%, var(--ds-text));
+}
+
+.ds-skeleton {
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-subtle);
+  animation: ds-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ds-skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
 }

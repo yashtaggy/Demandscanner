@@ -59,7 +59,7 @@ export function ScannerActionsMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="More scanner actions"
-        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)] text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-[var(--ds-border)] bg-[var(--ds-surface)] text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] disabled:cursor-not-allowed disabled:opacity-50"
         disabled={disabled}
       >
         <MoreHorizontal className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
@@ -85,7 +85,7 @@ export function ScannerActionsMenu({
               onRefresh();
             }}
             disabled={refreshing}
-            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] font-semibold text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] disabled:opacity-60"
+            className="flex min-h-11 w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] font-semibold text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] disabled:opacity-60"
           >
             <RefreshCw
               className={cn("h-3.5 w-3.5", refreshing && "animate-spin")}
@@ -105,7 +105,7 @@ export function ScannerActionsMenu({
               onExport("csv");
             }}
             disabled={exporting !== null}
-            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] font-semibold text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] disabled:opacity-60"
+            className="flex min-h-11 w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] font-semibold text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] disabled:opacity-60"
           >
             <Download
               className={cn("h-3.5 w-3.5", exporting === "csv" && "animate-pulse")}
@@ -123,7 +123,7 @@ export function ScannerActionsMenu({
               onExport("json");
             }}
             disabled={exporting !== null}
-            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] font-semibold text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] disabled:opacity-60"
+            className="flex min-h-11 w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] font-semibold text-[var(--ds-text-secondary)] transition-colors hover:bg-[var(--ds-surface-subtle)] hover:text-[var(--ds-text)] disabled:opacity-60"
           >
             <Download
               className={cn("h-3.5 w-3.5", exporting === "json" && "animate-pulse")}

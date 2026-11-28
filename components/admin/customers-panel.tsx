@@ -124,73 +124,87 @@ export function CustomersPanel({ plans }: { plans: SubscriptionPlan[] }) {
   }
 
   return (
-    <section className="rounded-2xl border border-slate-700/50 bg-slate-800/30 p-5 space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <section className="ds-panel overflow-hidden" aria-labelledby="customers-title" aria-busy={listLoading}>
+      <div className="flex flex-col gap-4 border-b border-[var(--ds-border)] px-5 py-5 lg:flex-row lg:items-center lg:justify-between sm:px-7">
         <div>
-          <h2 className="text-sm font-semibold text-slate-200">Customers</h2>
-          <p className="text-xs text-slate-500">
-            Search by email or name. Entitlement is computed by the database
-            for the current IST date.
+          <p className="ds-label">Accounts</p>
+          <h2 id="customers-title" className="mt-2 text-lg font-semibold text-[var(--ds-text)]">
+            Customers
+          </h2>
+          <p className="mt-1.5 text-sm text-[var(--ds-text-secondary)]">
+            Search by email or name. Entitlement is computed by the database for the current IST date.
           </p>
         </div>
         <form
-          className="flex items-center gap-2"
+          className="flex flex-col gap-2 sm:flex-row lg:w-full lg:max-w-md"
           onSubmit={(event) => {
             event.preventDefault();
             search();
           }}
         >
+          <label htmlFor="customer-search" className="sr-only">
+            Search customers
+          </label>
           <input
-            className={`${inputClass} w-64`}
+            id="customer-search"
+            className={`${inputClass} sm:min-w-0 sm:flex-1`}
             placeholder="Search email or name"
             value={query}
             maxLength={120}
             onChange={(event) => setQuery(event.target.value)}
           />
-          <Button size="sm" variant="secondary" type="submit" loading={listLoading}>
+          <Button size="md" variant="secondary" light type="submit" loading={listLoading}>
             Search
           </Button>
         </form>
       </div>
 
-      {listError && <p className="text-xs text-rose-400">{listError}</p>}
+      {listError && (
+        <p className="ds-alert ds-alert-negative mx-3 mt-3 sm:mx-5" role="alert">
+          {listError}
+        </p>
+      )}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-        <div className="max-h-[32rem] overflow-y-auto rounded-xl border border-slate-700/40">
-          {customers.length === 0 && !listLoading ? (
-            <p className="p-4 text-sm text-slate-500">No customers found.</p>
+      <div className="grid min-w-0 gap-4 p-3 sm:p-5 xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+        <div className="max-h-[32rem] overflow-y-auto rounded-[var(--ds-radius-md)] border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)]">
+          {listLoading && customers.length === 0 ? (
+            <div className="space-y-2 p-3" aria-label="Loading customers">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <div key={index} className="ds-skeleton h-20" />
+              ))}
+            </div>
+          ) : customers.length === 0 ? (
+            <p className="p-4 text-sm text-[var(--ds-text-secondary)]">No customers found.</p>
           ) : (
-            <ul className="divide-y divide-slate-800/70">
+            <ul className="divide-y divide-[var(--ds-border)]">
               {customers.map((customer) => (
                 <li key={customer.userId}>
                   <button
                     type="button"
+                    aria-pressed={selectedId === customer.userId}
                     onClick={() => select(customer.userId)}
-                    className={`w-full px-4 py-3 text-left transition-colors hover:bg-slate-800/50 ${
-                      selectedId === customer.userId ? "bg-slate-800/70" : ""
+                    className={`w-full px-4 py-3 text-left transition-colors hover:bg-[var(--ds-gold-50)] ${
+                      selectedId === customer.userId ? "bg-[var(--ds-gold-50)]" : ""
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm text-slate-200">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="truncate text-sm font-medium text-[var(--ds-text)]">
                         {customer.displayName || customer.email}
                       </span>
-                      <Badge variant={customer.entitled ? "success" : "neutral"}>
+                      <Badge variant={customer.entitled ? "success" : "neutral"} light className="shrink-0">
                         {customer.entitled ? "Active" : "Inactive"}
                       </Badge>
                     </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2">
-                      <span className="truncate text-xs text-slate-500">
-                        {customer.email}
-                      </span>
+                    <div className="mt-1.5 flex flex-col gap-1">
+                      <span className="truncate text-xs text-[var(--ds-text-secondary)]">{customer.email}</span>
                       {customer.subscription && (
-                        <span className="shrink-0 text-[11px] text-slate-600 tabular-nums">
-                          {customer.subscription.startDate} →{" "}
-                          {customer.subscription.endDate}
+                        <span className="ds-mono text-[10px] text-[var(--ds-text-secondary)]">
+                          {customer.subscription.startDate} → {customer.subscription.endDate}
                         </span>
                       )}
                     </div>
                     {customer.accountStatus !== "ACTIVE" && (
-                      <p className="mt-1 text-[11px] text-rose-400">
+                      <p className="mt-1.5 text-[11px] font-medium text-[var(--ds-negative)]">
                         Account {customer.accountStatus.toLowerCase()}
                       </p>
                     )}
@@ -203,21 +217,22 @@ export function CustomersPanel({ plans }: { plans: SubscriptionPlan[] }) {
 
         <div className="min-w-0">
           {detailLoading ? (
-            <div className="h-40 animate-pulse rounded-xl bg-slate-800/40" />
+            <div className="space-y-3" aria-label="Loading customer details">
+              <div className="ds-skeleton h-40" />
+              <div className="ds-skeleton h-56" />
+            </div>
           ) : detailError ? (
-            <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300">
+            <p className="ds-alert ds-alert-negative" role="alert">
               {detailError}
             </p>
           ) : detail ? (
-            <CustomerDetail
-              detail={detail}
-              plans={plans}
-              onChanged={refreshSelected}
-            />
+            <CustomerDetail detail={detail} plans={plans} onChanged={refreshSelected} />
           ) : (
-            <p className="rounded-xl border border-slate-700/40 p-4 text-sm text-slate-500">
-              Select a customer to view subscriptions and payments.
-            </p>
+            <div className="ds-empty min-h-40 flex items-center justify-center">
+              <p className="text-sm text-[var(--ds-text-secondary)]">
+                Select a customer to view subscriptions and payments.
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -241,16 +256,10 @@ function CustomerDetail({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Account suspension / reactivation
   const [statusReason, setStatusReason] = useState("");
-
-  // Assign subscription
-  const [assignPlanId, setAssignPlanId] = useState(
-    activePlans[0]?.planId ?? ""
-  );
+  const [assignPlanId, setAssignPlanId] = useState(activePlans[0]?.planId ?? "");
   const [assignStart, setAssignStart] = useState(today);
 
-  // Lifecycle action form
   const [action, setAction] = useState<{
     subscriptionId: string;
     kind: "ACTIVATE" | "EXTEND" | "CANCEL" | "RENEW";
@@ -259,14 +268,11 @@ function CustomerDetail({
   const [actionReason, setActionReason] = useState("");
   const [actionStart, setActionStart] = useState("");
 
-  // Payment form
   const currentSubscription =
     subscriptions.find(
       (item) => item.status === "ACTIVE" && item.startDate <= today && item.endDate >= today
     ) ?? subscriptions[0] ?? null;
-  const [paymentSubId, setPaymentSubId] = useState(
-    currentSubscription?.subscriptionId ?? ""
-  );
+  const [paymentSubId, setPaymentSubId] = useState(currentSubscription?.subscriptionId ?? "");
   const [payAmount, setPayAmount] = useState(currentSubscription?.planPrice ?? "0.00");
   const [payMethod, setPayMethod] = useState("UPI");
   const [payReference, setPayReference] = useState("");
@@ -355,78 +361,89 @@ function CustomerDetail({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-slate-700/40 bg-slate-900/30 p-4 space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-slate-200">
+      <section className="ds-panel-subtle p-4 sm:p-5" aria-labelledby="customer-account-title">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="ds-label">Customer account</p>
+            <h3 id="customer-account-title" className="mt-2 break-words text-lg font-semibold text-[var(--ds-text)]">
               {customer.displayName || customer.email}
-            </p>
-            <p className="text-xs text-slate-500">{customer.email}</p>
-            <p className="mt-1 text-[11px] text-slate-600 tabular-nums">
+            </h3>
+            <p className="mt-1 break-all text-sm text-[var(--ds-text-secondary)]">{customer.email}</p>
+            <p className="ds-mono mt-2 text-[11px] text-[var(--ds-text-secondary)]">
               Created {customer.createdAt.slice(0, 10)}
             </p>
           </div>
           <Badge
             variant={customer.accountStatus === "ACTIVE" ? "success" : "danger"}
+            light
+            dot
+            className="self-start"
           >
             Account {customer.accountStatus}
           </Badge>
         </div>
 
-        <div className="flex flex-wrap items-end gap-2">
-          <input
-            className={`${inputClass} w-64`}
-            placeholder="Reason for suspension or reactivation"
-            value={statusReason}
-            maxLength={500}
-            onChange={(event) => setStatusReason(event.target.value)}
-          />
-          {customer.accountStatus === "ACTIVE" ? (
-            <Button
-              size="sm"
-              variant="danger"
-              loading={busy === "status-SUSPENDED"}
-              onClick={() => changeAccountStatus("SUSPENDED")}
-            >
-              Suspend account
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="success"
-              loading={busy === "status-ACTIVE"}
-              onClick={() => changeAccountStatus("ACTIVE")}
-            >
-              Reactivate account
-            </Button>
-          )}
+        <div className="mt-5 border-t border-[var(--ds-border)] pt-5">
+          <label htmlFor="status-reason" className="ds-label">
+            Reason for suspension or reactivation
+          </label>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <input
+              id="status-reason"
+              className={`${inputClass} sm:max-w-lg sm:flex-1`}
+              placeholder="Enter a reason"
+              aria-describedby="status-reason-help"
+              value={statusReason}
+              maxLength={500}
+              onChange={(event) => setStatusReason(event.target.value)}
+            />
+            {customer.accountStatus === "ACTIVE" ? (
+              <Button
+                size="md"
+                variant="danger"
+                light
+                loading={busy === "status-SUSPENDED"}
+                onClick={() => changeAccountStatus("SUSPENDED")}
+              >
+                Suspend account
+              </Button>
+            ) : (
+              <Button
+                size="md"
+                variant="success"
+                light
+                loading={busy === "status-ACTIVE"}
+                onClick={() => changeAccountStatus("ACTIVE")}
+              >
+                Reactivate account
+              </Button>
+            )}
+          </div>
+          <p id="status-reason-help" className="mt-2 text-xs text-[var(--ds-text-secondary)]">
+            Reactivating an account does not extend an expired subscription.
+          </p>
         </div>
-        <p className="text-[11px] text-slate-600">
-          Reactivating an account does not extend an expired subscription.
-        </p>
-      </div>
+      </section>
 
       {error && (
-        <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+        <p className="ds-alert ds-alert-negative" role="alert">
           {error}
         </p>
       )}
 
-      <div className="rounded-xl border border-slate-700/40 bg-slate-900/30 p-4 space-y-3">
-        <p className="text-xs font-medium text-slate-300">Assign subscription</p>
-        <div className="flex flex-wrap items-end gap-2">
+      <section className="ds-panel-subtle p-4 sm:p-5" aria-labelledby="assign-subscription-title">
+        <h3 id="assign-subscription-title" className="text-sm font-semibold text-[var(--ds-text)]">
+          Assign subscription
+        </h3>
+        <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(180px,220px)_auto] md:items-end">
           <label className="block">
-            <span className="text-[10px] uppercase tracking-wider text-slate-600">
-              Plan
-            </span>
+            <span className="ds-label">Plan</span>
             <select
-              className={`${inputClass} w-56`}
+              className={`${inputClass} mt-2`}
               value={assignPlanId}
               onChange={(event) => setAssignPlanId(event.target.value)}
             >
-              {activePlans.length === 0 && (
-                <option value="">No active plans</option>
-              )}
+              {activePlans.length === 0 && <option value="">No active plans</option>}
               {activePlans.map((plan) => (
                 <option key={plan.planId} value={plan.planId}>
                   {plan.name} · {plan.durationDays}d · {plan.currency} {plan.price}
@@ -435,93 +452,75 @@ function CustomerDetail({
             </select>
           </label>
           <label className="block">
-            <span className="text-[10px] uppercase tracking-wider text-slate-600">
-              Start date (IST)
-            </span>
+            <span className="ds-label">Start date (IST)</span>
             <input
-              className={`${inputClass} w-40`}
+              className={`${inputClass} mt-2 ds-mono`}
               type="date"
               value={assignStart}
               onChange={(event) => setAssignStart(event.target.value)}
             />
           </label>
-          <Button
-            size="sm"
-            disabled={!assignPlanId}
-            loading={busy === "assign"}
-            onClick={assign}
-          >
+          <Button size="md" light disabled={!assignPlanId} loading={busy === "assign"} onClick={assign}>
             Assign (pending)
           </Button>
         </div>
-        <p className="text-[11px] text-slate-600">
-          Assignment creates a PENDING subscription. Activate it explicitly to
-          grant access.
+        <p className="mt-3 text-xs text-[var(--ds-text-secondary)]">
+          Assignment creates a PENDING subscription. Activate it explicitly to grant access.
         </p>
-      </div>
+      </section>
 
-      <div className="rounded-xl border border-slate-700/40 bg-slate-900/30 p-4 space-y-3">
-        <p className="text-xs font-medium text-slate-300">Subscriptions</p>
+      <section className="ds-panel-subtle p-4 sm:p-5" aria-labelledby="subscriptions-title">
+        <h3 id="subscriptions-title" className="text-sm font-semibold text-[var(--ds-text)]">
+          Subscriptions
+        </h3>
         {subscriptions.length === 0 ? (
-          <p className="text-sm text-slate-500">No subscriptions yet.</p>
+          <p className="mt-4 text-sm text-[var(--ds-text-secondary)]">No subscriptions yet.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="mt-4 space-y-3">
             {subscriptions.map((subscription) => (
               <div
                 key={subscription.subscriptionId}
-                className="rounded-lg border border-slate-800/80 p-3"
+                className="rounded-[var(--ds-radius-md)] border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] p-4"
               >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm text-slate-200">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[var(--ds-text)]">
                       {subscription.planName}{" "}
-                      <span className="text-xs text-slate-500 tabular-nums">
+                      <span className="ds-mono text-xs font-normal text-[var(--ds-text-secondary)]">
                         {subscription.startDate} → {subscription.endDate}
                       </span>
                     </p>
-                    <p className="mt-0.5 text-[11px] text-slate-600">
-                      Stored {subscription.status} · effective{" "}
-                      {subscription.effectiveStatus}
-                      {subscription.daysRemaining !== null
-                        ? ` · ${subscription.daysRemaining} days left`
-                        : ""}
+                    <p className="mt-1.5 text-[11px] leading-5 text-[var(--ds-text-secondary)]">
+                      Stored {subscription.status} · effective {subscription.effectiveStatus}
+                      {subscription.daysRemaining !== null ? ` · ${subscription.daysRemaining} days left` : ""}
                     </p>
                     {subscription.cancellationReason && (
-                      <p className="mt-0.5 text-[11px] text-amber-400/80">
+                      <p className="mt-1.5 text-[11px] text-[var(--ds-warning)]">
                         Cancelled: {subscription.cancellationReason}
                       </p>
                     )}
                   </div>
-                  <Badge variant={STATUS_VARIANT[subscription.effectiveStatus]}>
+                  <Badge variant={STATUS_VARIANT[subscription.effectiveStatus]} light className="self-start">
                     {statusLabel(subscription.effectiveStatus)}
                   </Badge>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-[var(--ds-border)] pt-3">
                   {subscription.status === "PENDING" && (
                     <Button
                       size="sm"
                       variant="success"
-                      onClick={() =>
-                        setAction({
-                          subscriptionId: subscription.subscriptionId,
-                          kind: "ACTIVATE",
-                        })
-                      }
+                      light
+                      onClick={() => setAction({ subscriptionId: subscription.subscriptionId, kind: "ACTIVATE" })}
                     >
                       Activate
                     </Button>
                   )}
-                  {(subscription.status === "PENDING" ||
-                    subscription.status === "ACTIVE") && (
+                  {(subscription.status === "PENDING" || subscription.status === "ACTIVE") && (
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() =>
-                        setAction({
-                          subscriptionId: subscription.subscriptionId,
-                          kind: "EXTEND",
-                        })
-                      }
+                      light
+                      onClick={() => setAction({ subscriptionId: subscription.subscriptionId, kind: "EXTEND" })}
                     >
                       Extend
                     </Button>
@@ -530,27 +529,20 @@ function CustomerDetail({
                     <Button
                       size="sm"
                       variant="danger"
-                      onClick={() =>
-                        setAction({
-                          subscriptionId: subscription.subscriptionId,
-                          kind: "CANCEL",
-                        })
-                      }
+                      light
+                      onClick={() => setAction({ subscriptionId: subscription.subscriptionId, kind: "CANCEL" })}
                     >
                       Cancel
                     </Button>
                   )}
-                  {(subscription.status === "ACTIVE" ||
-                    subscription.status === "EXPIRED") && (
+                  {(subscription.status === "ACTIVE" || subscription.status === "EXPIRED") && (
                     <Button
                       size="sm"
                       variant="secondary"
+                      light
                       onClick={() => {
                         setActionStart("");
-                        setAction({
-                          subscriptionId: subscription.subscriptionId,
-                          kind: "RENEW",
-                        });
+                        setAction({ subscriptionId: subscription.subscriptionId, kind: "RENEW" });
                       }}
                     >
                       Renew
@@ -563,15 +555,13 @@ function CustomerDetail({
         )}
 
         {action && (
-          <div className="space-y-2 rounded-lg border border-indigo-500/30 bg-indigo-500/5 p-3">
-            <p className="text-xs text-indigo-300">{action.kind} subscription</p>
+          <div className="ds-alert ds-alert-info mt-4" aria-live="polite">
+            <p className="font-semibold">{action.kind} subscription</p>
             {action.kind === "EXTEND" && (
-              <label className="block">
-                <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                  Additional days
-                </span>
+              <label className="mt-3 block">
+                <span className="ds-label">Additional days</span>
                 <input
-                  className={`${inputClass} w-32`}
+                  className={`${inputClass} mt-2 max-w-40`}
                   type="number"
                   min={1}
                   max={3660}
@@ -581,12 +571,10 @@ function CustomerDetail({
               </label>
             )}
             {action.kind === "CANCEL" && (
-              <label className="block">
-                <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                  Cancellation reason
-                </span>
+              <label className="mt-3 block">
+                <span className="ds-label">Cancellation reason</span>
                 <input
-                  className={inputClass}
+                  className={`${inputClass} mt-2`}
                   value={actionReason}
                   maxLength={500}
                   onChange={(event) => setActionReason(event.target.value)}
@@ -594,73 +582,61 @@ function CustomerDetail({
               </label>
             )}
             {action.kind === "RENEW" && (
-              <label className="block">
-                <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                  Start date (leave empty to start the day after the current
-                  end)
-                </span>
+              <label className="mt-3 block">
+                <span className="ds-label">Start date (leave empty to start the day after the current end)</span>
                 <input
-                  className={`${inputClass} w-44`}
+                  className={`${inputClass} mt-2 max-w-56 ds-mono`}
                   type="date"
                   value={actionStart}
                   onChange={(event) => setActionStart(event.target.value)}
                 />
               </label>
             )}
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                loading={busy === `action-${action.kind}`}
-                onClick={submitAction}
-              >
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button size="md" light loading={busy === `action-${action.kind}`} onClick={submitAction}>
                 Confirm {action.kind.toLowerCase()}
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={busy !== null}
-                onClick={() => setAction(null)}
-              >
+              <Button size="md" variant="ghost" light disabled={busy !== null} onClick={() => setAction(null)}>
                 Cancel
               </Button>
             </div>
           </div>
         )}
-      </div>
+      </section>
 
-      <div className="rounded-xl border border-slate-700/40 bg-slate-900/30 p-4 space-y-3">
-        <p className="text-xs font-medium text-slate-300">Payments</p>
+      <section className="ds-panel-subtle p-4 sm:p-5" aria-labelledby="payments-title">
+        <h3 id="payments-title" className="text-sm font-semibold text-[var(--ds-text)]">
+          Payments
+        </h3>
         {payments.length === 0 ? (
-          <p className="text-sm text-slate-500">No payments recorded.</p>
+          <p className="mt-4 text-sm text-[var(--ds-text-secondary)]">No payments recorded.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="text-slate-500">
-                <tr className="border-b border-slate-800">
-                  <th className="py-2 pr-3 font-medium">Date</th>
-                  <th className="py-2 pr-3 font-medium">Amount</th>
-                  <th className="py-2 pr-3 font-medium">Method</th>
-                  <th className="py-2 pr-3 font-medium">Reference</th>
-                  <th className="py-2 font-medium">Status</th>
+          <div className="ds-table-wrap mt-4" tabIndex={0} role="region" aria-label="Customer payment records table">
+            <table className="ds-table min-w-[680px]">
+              <caption className="sr-only">Customer payment records</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Amount</th>
+                  <th scope="col">Method</th>
+                  <th scope="col">Reference</th>
+                  <th scope="col">Status</th>
                 </tr>
               </thead>
-              <tbody className="text-slate-300">
+              <tbody>
                 {payments.map((payment) => (
-                  <tr
-                    key={payment.paymentId}
-                    className="border-b border-slate-800/60 last:border-0"
-                  >
-                    <td className="py-2 pr-3 tabular-nums">
-                      {payment.paymentDate}
-                    </td>
-                    <td className="py-2 pr-3 tabular-nums">
+                  <tr key={payment.paymentId}>
+                    <td className="ds-mono whitespace-nowrap">{payment.paymentDate}</td>
+                    <td className="ds-mono whitespace-nowrap font-medium text-[var(--ds-text)]">
                       {payment.currency} {payment.amount}
                     </td>
-                    <td className="py-2 pr-3">{payment.paymentMethod}</td>
-                    <td className="py-2 pr-3 text-slate-500">
-                      {payment.paymentReference || "—"}
+                    <td className="whitespace-nowrap">{payment.paymentMethod}</td>
+                    <td className="text-[var(--ds-text-secondary)]">{payment.paymentReference || "—"}</td>
+                    <td>
+                      <Badge variant={payment.paymentStatus === "RECORDED" ? "success" : "neutral"} light>
+                        {payment.paymentStatus}
+                      </Badge>
                     </td>
-                    <td className="py-2">{payment.paymentStatus}</td>
                   </tr>
                 ))}
               </tbody>
@@ -669,18 +645,15 @@ function CustomerDetail({
         )}
 
         {subscriptions.length > 0 && (
-          <div className="space-y-2 rounded-lg border border-slate-800/80 p-3">
-            <p className="text-[11px] text-slate-500">
-              Recording a payment does not change subscription status. Payments
-              cannot be edited or deleted.
+          <div className="mt-5 rounded-[var(--ds-radius-md)] border border-[var(--ds-border)] bg-[var(--ds-surface-elevated)] p-4">
+            <p className="text-xs leading-5 text-[var(--ds-text-secondary)]">
+              Recording a payment does not change subscription status. Payments cannot be edited or deleted.
             </p>
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <label className="block">
-                <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                  Subscription
-                </span>
+                <span className="ds-label">Subscription</span>
                 <select
-                  className={inputClass}
+                  className={`${inputClass} mt-2`}
                   value={paymentSubId}
                   onChange={(event) => {
                     setPaymentSubId(event.target.value);
@@ -691,82 +664,64 @@ function CustomerDetail({
                   }}
                 >
                   {subscriptions.map((subscription) => (
-                    <option
-                      key={subscription.subscriptionId}
-                      value={subscription.subscriptionId}
-                    >
-                      {subscription.planName} · {subscription.startDate} →{" "}
-                      {subscription.endDate}
+                    <option key={subscription.subscriptionId} value={subscription.subscriptionId}>
+                      {subscription.planName} · {subscription.startDate} → {subscription.endDate}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="block">
-                <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                  Amount
-                </span>
+                <span className="ds-label">Amount</span>
                 <input
-                  className={inputClass}
+                  className={`${inputClass} mt-2 ds-mono`}
                   inputMode="decimal"
                   value={payAmount}
                   onChange={(event) => setPayAmount(event.target.value)}
                 />
               </label>
               <label className="block">
-                <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                  Method
-                </span>
+                <span className="ds-label">Method</span>
                 <input
-                  className={inputClass}
+                  className={`${inputClass} mt-2`}
                   value={payMethod}
                   maxLength={40}
                   onChange={(event) => setPayMethod(event.target.value)}
                 />
               </label>
               <label className="block">
-                <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                  Reference
-                </span>
+                <span className="ds-label">Reference</span>
                 <input
-                  className={inputClass}
+                  className={`${inputClass} mt-2`}
                   value={payReference}
                   maxLength={120}
                   onChange={(event) => setPayReference(event.target.value)}
                 />
               </label>
               <label className="block">
-                <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                  Payment date (IST)
-                </span>
+                <span className="ds-label">Payment date (IST)</span>
                 <input
-                  className={inputClass}
+                  className={`${inputClass} mt-2 ds-mono`}
                   type="date"
                   value={payDate}
                   onChange={(event) => setPayDate(event.target.value)}
                 />
               </label>
               <label className="block">
-                <span className="text-[10px] uppercase tracking-wider text-slate-600">
-                  Notes
-                </span>
+                <span className="ds-label">Notes</span>
                 <input
-                  className={inputClass}
+                  className={`${inputClass} mt-2`}
                   value={payNotes}
                   maxLength={1000}
                   onChange={(event) => setPayNotes(event.target.value)}
                 />
               </label>
             </div>
-            <Button
-              size="sm"
-              loading={busy === "payment"}
-              onClick={recordPayment}
-            >
+            <Button size="md" light className="mt-4" loading={busy === "payment"} onClick={recordPayment}>
               Record payment
             </Button>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
